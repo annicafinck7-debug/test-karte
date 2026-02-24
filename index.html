@@ -1,1 +1,789 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Angebots-Navi – Firmen & Kunden</title>
 
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <style>
+    html,body{height:100%;margin:0}
+    #map{height:100%;width:100%}
+
+    .panel{
+      position:absolute; top:12px; left:12px; z-index:2000;
+      width:380px; background:#fff; border-radius:12px;
+      box-shadow:0 10px 30px rgba(0,0,0,.18);
+      font:14px/1.25 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      overflow:hidden;
+      user-select:none;
+    }
+    .panel.hidden{display:none;}
+    .panel-header{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:10px 12px; background:#111; color:#fff; cursor:move;
+    }
+    .panel-header .title{font-weight:700; font-size:14px;}
+    .panel-header .x{
+      width:28px;height:28px;border-radius:8px; border:0;
+      background:rgba(255,255,255,.12); color:#fff; cursor:pointer;
+      font-weight:800;
+    }
+    .panel-body{padding:10px 12px; user-select:text;}
+    .row{display:flex; gap:8px; margin:8px 0;}
+    .row > *{flex:1;}
+    label{display:block; font-size:12px; opacity:.8; margin-bottom:4px;}
+    input, select, button{
+      width:100%; box-sizing:border-box; padding:8px 9px;
+      border:1px solid #d9d9d9; border-radius:10px;
+      outline:none; font:inherit; background:#fff;
+    }
+    input:focus, select:focus{border-color:#777}
+    .btn{background:#111; color:#fff; border:0; cursor:pointer; font-weight:700;}
+    .btn.secondary{background:#f2f2f2; color:#111; border:1px solid #e5e5e5;}
+    .small{font-size:12px; opacity:.8}
+    .divider{height:1px;background:#eee;margin:10px 0;}
+    .kpi{
+      display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;
+    }
+    .kpi .box{
+      border:1px solid #eee; border-radius:12px; padding:8px;
+      background:#fcfcfc;
+    }
+    .kpi .box .h{font-size:12px; opacity:.8}
+    .kpi .box .v{font-weight:800; margin-top:2px}
+    .table{
+      width:100%; border-collapse:separate; border-spacing:0;
+      margin-top:8px; font-size:13px;
+    }
+    .table th, .table td{
+      text-align:left; padding:8px 6px; border-bottom:1px solid #eee;
+      vertical-align:top;
+    }
+    .table th{font-size:12px; opacity:.8; font-weight:700}
+    .pill{
+      display:inline-block; padding:3px 8px; border-radius:999px; font-size:12px;
+      border:1px solid #e6e6e6; background:#fafafa;
+    }
+    .good{background:#eaffea;border-color:#bfe6bf}
+    .mid{background:#fff6db;border-color:#f1d79b}
+    .bad{background:#ffe8e8;border-color:#f1b5b5}
+
+    .hint{
+      position:absolute; bottom:12px; left:12px; z-index:2000;
+      background:#fff; border-radius:12px; padding:8px 10px;
+      box-shadow:0 8px 20px rgba(0,0,0,.16);
+      font:13px/1.2 system-ui, Arial;
+      max-width:620px;
+    }
+
+    .rcard{font:14px/1.25 system-ui, Arial; padding:8px; min-width:260px;}
+    .rcard .h{font-weight:800;margin-bottom:6px}
+    .rcard .r{display:flex; gap:8px; align-items:center; margin-top:6px}
+    .rcard input{flex:1}
+    .rcard .note{font-size:12px; opacity:.75; margin-top:6px}
+  </style>
+</head>
+
+<body>
+<div id="map"></div>
+
+<div id="panel" class="panel">
+  <div id="panelHeader" class="panel-header">
+    <div class="title">Angebots-Navi (neu)</div>
+    <button id="closePanel" class="x" title="Schließen">✕</button>
+  </div>
+  <div class="panel-body">
+    <div class="row">
+      <div>
+        <label>Kunde suchen</label>
+        <input id="custSearch" placeholder="Name / Ort … (Enter springt)">
+      </div>
+      <div style="max-width:120px">
+        <label>Radius (km)</label>
+        <input id="radiusKm" type="number" min="0" value="250">
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>Produkt</label>
+        <select id="product">
+          <option value="lose">Lose</option>
+          <option value="sackware">Sackware</option>
+          <option value="industrieware">Industrieware</option>
+        </select>
+      </div>
+      <div>
+        <label>Menge (t)</label>
+        <input id="qtyT" type="number" min="0" step="0.1" value="24">
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>Ziel-VK (€/t) optional</label>
+        <input id="targetVk" type="number" step="0.01" placeholder="z.B. 295">
+      </div>
+      <div>
+        <label>Fracht €/km</label>
+        <input id="freightPerKm" type="number" step="0.01" value="1.85">
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>Aufschlag Faktor</label>
+        <input id="factor" type="number" step="0.01" value="1.05">
+      </div>
+      <div>
+        <label>Zertifikat enthält</label>
+        <input id="certFilter" placeholder="z.B. ENplus oder SURE">
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="row">
+      <button id="btnRecalc" class="btn">Top-Optionen berechnen</button>
+      <button id="btnClear" class="btn secondary">Auswahl löschen</button>
+    </div>
+
+    <div class="row">
+      <button id="btnGeocode" class="btn secondary">Adressen geocoden (Cache füllen)</button>
+      <button id="btnShowPanel" class="btn secondary">Panel anzeigen (Taste P)</button>
+    </div>
+
+    <div class="kpi">
+      <div class="box">
+        <div class="h">Ausgewählter Kunde</div>
+        <div class="v" id="kpiCustomer">—</div>
+      </div>
+      <div class="box">
+        <div class="h">Gefundene Firmen</div>
+        <div class="v" id="kpiWorks">—</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div style="font-weight:800; margin-bottom:6px;">Top 3 Optionen</div>
+    <div id="results"></div>
+
+    <div class="divider"></div>
+    <div class="small" id="geoStatus">Geocoding: —</div>
+  </div>
+</div>
+
+<div class="hint">
+  <b>So geht’s:</b> Klick auf <b>Kunden</b> → „<b>Top-Optionen</b>“. <br>
+  <b>Preis ändern:</b> Rechtsklick auf Firma → Preis eingeben → <b>Enter</b>. <br>
+  Panel ist <b>verschiebbar</b> und geht nur über <b>✕</b> zu.
+</div>
+
+<script>
+/* =========================
+   CONFIG (deine Sheets)
+   ========================= */
+const CONFIG = {
+  firmsCsvUrl: "https://docs.google.com/spreadsheets/d/1f1oD1TlYWPRbD12d05yIGkqmXVygVt3ZHLk9U0bKoTs/gviz/tq?tqx=out:csv&gid=0",
+  customersCsvUrl: "https://docs.google.com/spreadsheets/d/1DaiLyZbhJkdSQ1PHbJQmguIrDnGrrhiAVgJC4PJO8vA/gviz/tq?tqx=out:csv&gid=0",
+
+  customerColor: "#4f46e5",
+  firmColor: "#111",
+
+  // Nominatim: bitte nicht zu schnell anfragen
+  geocodeDelayMs: 1100
+};
+
+/* =========================
+   STORAGE KEYS
+   ========================= */
+const LS_GEO_CACHE_KEY = "offerNavi_geoCache_v1";
+const LS_PRICE_OVERRIDES_KEY = "offerNavi_priceOverrides_v2";
+const LS_PANEL_POS_KEY = "offerNavi_panelPos_v2";
+
+let geoCache = loadLS(LS_GEO_CACHE_KEY, {}); // { "address": {lat, lon, ts} }
+let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {}); // { workId: {lose,sackware,industrieware} }
+
+let map;
+let customers = [];
+let firms = [];
+let customerMarkers = [];
+let firmMarkers = [];
+let selectedCustomer = null;
+let selectedCustomerMarker = null;
+let activeLine = null;
+
+init();
+
+async function init(){
+  map = L.map('map', { worldCopyJump:true }).setView([51.2, 10.4], 6);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(map);
+
+  initPanelDrag();
+  initPanelActions();
+
+  await Promise.all([loadCustomers(), loadFirms()]);
+  await ensureCoordsFastPass();   // nutzt Cache sofort
+  renderMarkers();
+  setGeoStatus();
+}
+
+/* =========================
+   CSV LOAD
+   ========================= */
+function parseCsv(url){
+  return new Promise((resolve, reject)=>{
+    Papa.parse(url, {
+      download:true,
+      header:true,
+      skipEmptyLines:true,
+      complete: (res)=>resolve(res.data),
+      error: reject
+    });
+  });
+}
+
+async function loadCustomers(){
+  const rows = await parseCsv(CONFIG.customersCsvUrl);
+  customers = rows.map((r, idx)=>{
+    const name = str(r.name ?? r.Name ?? r.kunde ?? r.Kunde).trim();
+    const ort  = str(r.ort ?? r.Ort ?? r.adresse ?? r.Adresse).trim();
+    return {
+      id: "C"+idx,
+      name: name || "Kunde",
+      address: ort,
+      lat: NaN,
+      lon: NaN,
+      raw: r
+    };
+  }).filter(x=>x.name && x.address);
+}
+
+async function loadFirms(){
+  const rows = await parseCsv(CONFIG.firmsCsvUrl);
+
+  firms = rows.map((r, idx)=>{
+    // Aus deinem Screenshot:
+    // A: firma, B: ort, C: preis, D: sackwaren?, E: zertifikat, F: sackware, G: industriewar(e)
+    const name = str(r.firma ?? r.Firma ?? r.name ?? r.Name).trim();
+    const ort  = str(r.ort ?? r.Ort ?? r.adresse ?? r.Adresse).trim();
+
+    const certsStr = str(r.zertifikat ?? r.Zertifikat ?? r.certs ?? r.Certs ?? "");
+    const certs = certsStr.split(/[;,]/g).map(s=>s.trim()).filter(Boolean);
+
+    const baseLose = toNum(r.preis ?? r.Preis);              // "preis" = lose
+    const baseSack = toNum(r.sackware ?? r.Sackware);        // "sackware"
+    const baseInd  = toNum(r.industriewar ?? r.Industriewar ?? r.industrieware ?? r.Industrieware);
+
+    return {
+      id: "W"+idx,
+      name: name || "Firma",
+      address: ort,
+      certs,
+      base: {
+        lose: baseLose,
+        sackware: baseSack,
+        industrieware: baseInd
+      },
+      lat: NaN,
+      lon: NaN,
+      raw: r
+    };
+  }).filter(x=>x.name && x.address);
+}
+
+/* =========================
+   GEOCODING (Adresse -> Lat/Lon)
+   ========================= */
+function normalizeAddress(a){
+  return str(a).trim().replace(/\s+/g,' ');
+}
+
+async function geocodeAddress(address){
+  const key = normalizeAddress(address);
+  if(!key) return null;
+
+  if(geoCache[key] && isFinite(geoCache[key].lat) && isFinite(geoCache[key].lon)){
+    return {lat: geoCache[key].lat, lon: geoCache[key].lon};
+  }
+
+  const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(key);
+
+  try{
+    const res = await fetch(url, {
+      headers: {
+        // Nominatim mag Referer/Browser; User-Agent kann browserseitig eingeschränkt sein.
+        "Accept": "application/json"
+      }
+    });
+    const data = await res.json();
+    if(data && data[0]){
+      const lat = parseFloat(data[0].lat);
+      const lon = parseFloat(data[0].lon);
+      if(isFinite(lat) && isFinite(lon)){
+        geoCache[key] = {lat, lon, ts: Date.now()};
+        saveLS(LS_GEO_CACHE_KEY, geoCache);
+        return {lat, lon};
+      }
+    }
+  }catch(e){
+    console.warn("Geocode error", e);
+  }
+
+  return null;
+}
+
+async function ensureCoordsFastPass(){
+  // nutzt NUR Cache (keine Calls), damit sofort was da ist
+  customers.forEach(c=>{
+    const k = normalizeAddress(c.address);
+    const hit = geoCache[k];
+    if(hit){ c.lat = hit.lat; c.lon = hit.lon; }
+  });
+  firms.forEach(w=>{
+    const k = normalizeAddress(w.address);
+    const hit = geoCache[k];
+    if(hit){ w.lat = hit.lat; w.lon = hit.lon; }
+  });
+}
+
+async function geocodeAll(){
+  // wirklich geocoden (mit Delay)
+  const status = document.getElementById("geoStatus");
+  let done = 0;
+  let total = customers.length + firms.length;
+
+  const items = [
+    ...customers.map(x=>({type:"Kunde", obj:x})),
+    ...firms.map(x=>({type:"Firma", obj:x}))
+  ];
+
+  for(const it of items){
+    if(isFinite(it.obj.lat) && isFinite(it.obj.lon)){
+      done++;
+      status.textContent = `Geocoding: ${done}/${total} (Cache)`;
+      continue;
+    }
+
+    status.textContent = `Geocoding: ${done}/${total} (suche ${it.type}…)`;
+    const coords = await geocodeAddress(it.obj.address);
+    if(coords){
+      it.obj.lat = coords.lat;
+      it.obj.lon = coords.lon;
+    }
+    done++;
+    status.textContent = `Geocoding: ${done}/${total}`;
+    await sleep(CONFIG.geocodeDelayMs);
+  }
+
+  renderMarkers();
+  setGeoStatus();
+}
+
+function setGeoStatus(){
+  const cOk = customers.filter(x=>isFinite(x.lat)&&isFinite(x.lon)).length;
+  const fOk = firms.filter(x=>isFinite(x.lat)&&isFinite(x.lon)).length;
+  document.getElementById("geoStatus").textContent =
+    `Geocoding: Kunden ${cOk}/${customers.length} · Firmen ${fOk}/${firms.length} (Cache gespeichert)`;
+}
+
+/* =========================
+   MARKERS
+   ========================= */
+function renderMarkers(){
+  customerMarkers.forEach(m=>m.remove());
+  firmMarkers.forEach(m=>m.remove());
+  customerMarkers = [];
+  firmMarkers = [];
+
+  customers.forEach(c=>{
+    if(!isFinite(c.lat) || !isFinite(c.lon)) return;
+    const m = L.circleMarker([c.lat, c.lon], {
+      radius:6, color: CONFIG.customerColor, weight:2, fillOpacity:.9
+    }).addTo(map);
+
+    m.bindTooltip(`<b>${escapeHtml(c.name)}</b><br>${escapeHtml(c.address)}`, {direction:"top"});
+    m.on("click", ()=>selectCustomer(c, m));
+    customerMarkers.push(m);
+  });
+
+  firms.forEach(w=>{
+    if(!isFinite(w.lat) || !isFinite(w.lon)) return;
+    const m = L.circleMarker([w.lat, w.lon], {
+      radius:6, color: CONFIG.firmColor, weight:2, fillOpacity:.75
+    }).addTo(map);
+
+    m.bindTooltip(`<b>${escapeHtml(w.name)}</b><br>${escapeHtml(w.address)}`, {direction:"top"});
+    m.on("contextmenu", (e)=>openRightClickPricePopup(w, e.latlng));
+    firmMarkers.push(m);
+  });
+}
+
+/* =========================
+   UI / PANEL
+   ========================= */
+function initPanelActions(){
+  document.getElementById("btnRecalc").addEventListener("click", recalc);
+  document.getElementById("btnClear").addEventListener("click", clearSelection);
+  document.getElementById("btnGeocode").addEventListener("click", geocodeAll);
+  document.getElementById("btnShowPanel").addEventListener("click", ()=>document.getElementById("panel").classList.remove("hidden"));
+
+  document.getElementById("closePanel").addEventListener("click", ()=>{
+    document.getElementById("panel").classList.add("hidden");
+  });
+
+  window.addEventListener("keydown", (e)=>{
+    if(e.key.toLowerCase()==="p"){
+      document.getElementById("panel").classList.remove("hidden");
+    }
+  });
+
+  const cs = document.getElementById("custSearch");
+  cs.addEventListener("keydown", (e)=>{
+    if(e.key==="Enter"){
+      const q = cs.value.trim().toLowerCase();
+      if(!q) return;
+      const found = customers.find(c => (`${c.name} ${c.address}`).toLowerCase().includes(q));
+      if(found && isFinite(found.lat) && isFinite(found.lon)){
+        const m = customerMarkers.find(mm=>{
+          const ll = mm.getLatLng();
+          return Math.abs(ll.lat-found.lat)<1e-8 && Math.abs(ll.lng-found.lon)<1e-8;
+        });
+        selectCustomer(found, m || null);
+      }
+    }
+  });
+}
+
+function initPanelDrag(){
+  const panel = document.getElementById("panel");
+  const header = document.getElementById("panelHeader");
+
+  const pos = loadLS(LS_PANEL_POS_KEY, null);
+  if(pos && isFinite(pos.x) && isFinite(pos.y)){
+    panel.style.left = pos.x + "px";
+    panel.style.top  = pos.y + "px";
+  }
+
+  let dragging=false, startX=0, startY=0, startLeft=0, startTop=0;
+
+  header.addEventListener("mousedown", (e)=>{
+    dragging=true;
+    startX=e.clientX; startY=e.clientY;
+    const rect = panel.getBoundingClientRect();
+    startLeft = rect.left; startTop=rect.top;
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove", (e)=>{
+    if(!dragging) return;
+    const x = Math.max(6, startLeft + (e.clientX-startX));
+    const y = Math.max(6, startTop  + (e.clientY-startY));
+    panel.style.left = x+"px";
+    panel.style.top  = y+"px";
+  });
+  window.addEventListener("mouseup", ()=>{
+    if(!dragging) return;
+    dragging=false;
+    const rect = panel.getBoundingClientRect();
+    saveLS(LS_PANEL_POS_KEY, {x: rect.left, y: rect.top});
+  });
+}
+
+/* =========================
+   SELECTION + CALC
+   ========================= */
+function selectCustomer(c, marker){
+  selectedCustomer = c;
+
+  if(selectedCustomerMarker){
+    selectedCustomerMarker.setStyle({ radius:6, weight:2, fillOpacity:.9 });
+  }
+  if(marker){
+    selectedCustomerMarker = marker;
+    marker.setStyle({ radius:10, weight:3, fillOpacity:1 });
+  }
+
+  document.getElementById("kpiCustomer").textContent = c.name;
+
+  if(isFinite(c.lat) && isFinite(c.lon)){
+    map.setView([c.lat, c.lon], Math.max(map.getZoom(), 7), {animate:true});
+  }
+}
+
+function clearSelection(){
+  selectedCustomer = null;
+  if(selectedCustomerMarker){
+    selectedCustomerMarker.setStyle({ radius:6, weight:2, fillOpacity:.9 });
+    selectedCustomerMarker = null;
+  }
+  document.getElementById("kpiCustomer").textContent = "—";
+  document.getElementById("kpiWorks").textContent = "—";
+  document.getElementById("results").innerHTML = "";
+  if(activeLine){ activeLine.remove(); activeLine = null; }
+}
+
+function getInputs(){
+  const radiusKm = toNum(document.getElementById("radiusKm").value);
+  const qtyT = Math.max(0.1, toNum(document.getElementById("qtyT").value) || 24);
+  const product = document.getElementById("product").value;
+  const targetVk = toNum(document.getElementById("targetVk").value);
+  const freightPerKm = toNum(document.getElementById("freightPerKm").value) || 1.85;
+  const factor = toNum(document.getElementById("factor").value) || 1.05;
+  const certFilter = document.getElementById("certFilter").value.trim().toLowerCase();
+  return {radiusKm, qtyT, product, targetVk, freightPerKm, factor, certFilter};
+}
+
+function recalc(){
+  const resDiv = document.getElementById("results");
+  resDiv.innerHTML = "";
+
+  if(!selectedCustomer || !isFinite(selectedCustomer.lat) || !isFinite(selectedCustomer.lon)){
+    resDiv.innerHTML = `<div class="small">Bitte zuerst einen Kunden anklicken (und ggf. einmal „Adressen geocoden“ drücken).</div>`;
+    document.getElementById("kpiWorks").textContent = "—";
+    return;
+  }
+
+  const {radiusKm, qtyT, product, targetVk, freightPerKm, factor, certFilter} = getInputs();
+
+  const options = firms.map(w=>{
+    if(!isFinite(w.lat) || !isFinite(w.lon)) return null;
+
+    const km = haversineKm(selectedCustomer.lat, selectedCustomer.lon, w.lat, w.lon);
+
+    const override = priceOverrides?.[w.id]?.[product];
+    const base = isFinite(override) ? override : w.base[product];
+
+    if(!(km <= radiusKm)) return null;
+    if(!isFinite(base) || base <= 0) return null;
+
+    if(certFilter){
+      const joined = (w.certs||[]).join(" ").toLowerCase();
+      if(!joined.includes(certFilter)) return null;
+    }
+
+    const freightPerT = (km * freightPerKm / qtyT) * factor;
+    const delivered = base + freightPerT;
+
+    let marginPerT = null, marginTotal = null;
+    if(isFinite(targetVk)){
+      marginPerT = targetVk - delivered;
+      marginTotal = marginPerT * qtyT;
+    }
+    return {w, km, base, freightPerT, delivered, marginPerT, marginTotal};
+  }).filter(Boolean);
+
+  options.sort((a,b)=>a.delivered - b.delivered);
+  document.getElementById("kpiWorks").textContent = String(options.length);
+
+  if(!options.length){
+    resDiv.innerHTML = `<div class="small">Keine Firmen im Radius / mit Filter gefunden.</div>`;
+    return;
+  }
+
+  const top = options.slice(0,3);
+  const table = document.createElement("table");
+  table.className="table";
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>Firma</th>
+        <th>KM</th>
+        <th>Lieferpreis</th>
+        <th>${isFinite(targetVk) ? "Marge" : "Info"}</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  `;
+  const tbody = table.querySelector("tbody");
+
+  top.forEach(x=>{
+    const badge = getBadge(x, isFinite(targetVk));
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>
+        <b>${escapeHtml(x.w.name)}</b><br>
+        <span class="small">${escapeHtml(x.w.address)} · Basis: ${fmt(x.base)} €/t · Fracht: ${fmt(x.freightPerT)} €/t</span>
+      </td>
+      <td>${fmt(x.km,0)}</td>
+      <td><b>${fmt(x.delivered)} €/t</b></td>
+      <td>${badge}</td>
+    `;
+    tr.style.cursor="pointer";
+    tr.addEventListener("click", ()=>{
+      drawLine(selectedCustomer, x.w);
+      copyOfferText(selectedCustomer, x, getInputs());
+    });
+    tbody.appendChild(tr);
+  });
+
+  const note = document.createElement("div");
+  note.className="small";
+  note.style.marginTop="8px";
+  note.textContent = "Klick auf eine Option: Linie + Angebotstext wird kopiert.";
+
+  resDiv.appendChild(table);
+  resDiv.appendChild(note);
+}
+
+function drawLine(c, w){
+  if(activeLine) activeLine.remove();
+  activeLine = L.polyline([[c.lat,c.lon],[w.lat,w.lon]], {weight:4}).addTo(map);
+  map.fitBounds(activeLine.getBounds().pad(0.25), {animate:true});
+}
+
+/* =========================
+   RIGHT CLICK PRICE EDIT (ENTER saves)
+   ========================= */
+function openRightClickPricePopup(work, latlng){
+  const product = document.getElementById("product").value;
+  const currentOverride = priceOverrides?.[work.id]?.[product];
+  const current = isFinite(currentOverride) ? currentOverride : work.base[product];
+
+  const div = document.createElement("div");
+  div.className = "rcard";
+  div.innerHTML = `
+    <div class="h">${escapeHtml(work.name)}</div>
+    <div class="small">Preis für <b>${escapeHtml(productLabel(product))}</b> (€/t)</div>
+    <div class="r">
+      <input id="priceInput" type="number" step="0.01" value="${isFinite(current)?current:""}" />
+    </div>
+    <div class="note">Enter = speichern · Esc = schließen</div>
+  `;
+
+  const popup = L.popup({closeButton:true, autoClose:true, closeOnClick:true})
+    .setLatLng(latlng)
+    .setContent(div)
+    .openOn(map);
+
+  setTimeout(()=>{
+    const inp = div.querySelector("#priceInput");
+    inp.focus(); inp.select();
+
+    inp.addEventListener("keydown", (e)=>{
+      if(e.key==="Enter"){
+        const v = toNum(inp.value);
+        if(isFinite(v) && v>0){
+          priceOverrides[work.id] = priceOverrides[work.id] || {};
+          priceOverrides[work.id][product] = v;
+          saveLS(LS_PRICE_OVERRIDES_KEY, priceOverrides);
+          map.closePopup(popup);
+          recalc();
+        }
+      }
+      if(e.key==="Escape"){
+        map.closePopup(popup);
+      }
+    });
+  }, 30);
+}
+
+/* =========================
+   COPY OFFER TEXT
+   ========================= */
+async function copyOfferText(customer, option, inputs){
+  const {product, qtyT, targetVk} = inputs;
+
+  const text =
+`Angebots-Vorschlag
+Kunde: ${customer.name}
+Adresse: ${customer.address}
+Produkt: ${productLabel(product)}
+Menge: ${qtyT} t
+
+Firma: ${option.w.name}
+Adresse: ${option.w.address}
+Distanz: ${Math.round(option.km)} km
+Basis: ${round2(option.base)} €/t
+Fracht: ${round2(option.freightPerT)} €/t
+Lieferpreis: ${round2(option.delivered)} €/t
+${isFinite(targetVk) ? `Ziel-VK: ${round2(targetVk)} €/t
+Marge: ${round2(option.marginPerT)} €/t (${round2(option.marginTotal)} € gesamt)` : ""}
+
+(automatisch berechnet)`;
+
+  try{
+    await navigator.clipboard.writeText(text);
+  }catch(e){
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
+  }
+}
+
+/* =========================
+   HELPERS
+   ========================= */
+function toNum(v){
+  if(v===null || v===undefined) return NaN;
+  if(typeof v==="number") return v;
+  const s = String(v).trim().replace(",", ".");
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : NaN;
+}
+function str(v){ return (v===null||v===undefined) ? "" : String(v); }
+function fmt(n, dec=2){
+  if(!isFinite(n)) return "—";
+  return n.toFixed(dec).replace(".", ",");
+}
+function round2(n){ return Math.round(n*100)/100; }
+function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
+
+function haversineKm(lat1, lon1, lat2, lon2){
+  const R = 6371;
+  const toRad = d => d * Math.PI/180;
+  const dLat = toRad(lat2-lat1);
+  const dLon = toRad(lon2-lon1);
+  const a =
+    Math.sin(dLat/2)**2 +
+    Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*(Math.sin(dLon/2)**2);
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+
+function productLabel(p){
+  if(p==="lose") return "Lose";
+  if(p==="sackware") return "Sackware";
+  if(p==="industrieware") return "Industrieware";
+  return p;
+}
+
+function getBadge(x, hasTarget){
+  if(!hasTarget){
+    const cert = (x.w.certs||[]).slice(0,2).join(", ");
+    return `<span class="pill">${cert ? escapeHtml(cert) : "—"}</span>`;
+  }
+  const m = x.marginPerT;
+  if(!isFinite(m)) return `<span class="pill">—</span>`;
+  if(m >= 10) return `<span class="pill good">+${fmt(m)} €/t</span>`;
+  if(m >= 0)  return `<span class="pill mid">+${fmt(m)} €/t</span>`;
+  return `<span class="pill bad">${fmt(m)} €/t</span>`;
+}
+
+function saveLS(key, obj){
+  try{ localStorage.setItem(key, JSON.stringify(obj)); }catch(e){}
+}
+function loadLS(key, fallback){
+  try{
+    const s = localStorage.getItem(key);
+    return s ? JSON.parse(s) : fallback;
+  }catch(e){ return fallback; }
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, m=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[m]));
+}
+</script>
+</body>
+</html>
