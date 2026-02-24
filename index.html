@@ -192,6 +192,19 @@
       border-bottom:18px solid #6d7cff;
       filter: drop-shadow(0 3px 6px rgba(0,0,0,.55));
     }
+
+    /* Lieferungen Liste im Popup */
+    .deliv{
+      margin-top:8px;
+      border-top:1px solid rgba(255,255,255,.10);
+      padding-top:8px;
+      font-size:13px;
+    }
+    .deliv .t{font-weight:900; margin-bottom:6px}
+    .deliv .row{display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-bottom:1px solid rgba(255,255,255,.08)}
+    .deliv .row:last-child{border-bottom:none}
+    .deliv .f{font-weight:800}
+    .deliv .n{font-weight:900; opacity:.95}
   </style>
 </head>
 
@@ -292,6 +305,10 @@
 const CONFIG = {
   firmsCsvUrl: "https://docs.google.com/spreadsheets/d/1f1oD1TlYWPRbD12d05yIGkqmXVygVt3ZHLk9U0bKoTs/gviz/tq?tqx=out:csv&gid=0",
   customersCsvUrl: "https://docs.google.com/spreadsheets/d/1DaiLyZbhJkdSQ1PHbJQmguIrDnGrrhiAVgJC4PJO8vA/gviz/tq?tqx=out:csv&gid=0",
+
+  /* NEU: Lieferungen (Kunde / firma / anzahl) */
+  deliveriesCsvUrl: "https://docs.google.com/spreadsheets/d/1fcvlM2BUDpoV-HDyPtgDf_1ZqWql6MdEMbisR0eqYYw/gviz/tq?tqx=out:csv&gid=0",
+
   geocodeDelayMs: 1100
 };
 
@@ -314,6 +331,10 @@ let selectedCustomer=null;
 let routeLayer=null;
 let lastRouteKm=null;
 
+/* NEU: Lieferungen */
+let deliveriesByCustomer = new Map(); // key: normCustomerName -> [{firma, anzahl}]
+let deliveriesLoaded = false;
+
 /* =========================
    Init
    ========================= */
@@ -330,7 +351,7 @@ async function init(){
   initUI();
 
   setLoadStatus("Lade Tabellen …");
-  await Promise.all([loadCustomers(), loadFirms()]);
+  await Promise.all([loadCustomers(), loadFirms(), loadDeliveries()]);
   applyCacheCoordsOnly();
   renderMarkers();
   updateCustomerKpi(null);
@@ -356,7 +377,6 @@ function parseCsv(url){
 async function loadCustomers(){
   const rows = await parseCsv(CONFIG.customersCsvUrl);
   customers = rows.map((r, idx)=>{
-    // robuste Felder
     const name = str(r["name"] ?? r["kundenname"] ?? r["kunde"] ?? r["firma"] ?? r["unternehmen"]).trim();
     const ort  = str(r["ort"] ?? r["adresse"] ?? r["address"]).trim();
     return {
@@ -376,7 +396,6 @@ async function loadFirms(){
     const name = str(r["firma"] ?? r["name"]).trim();
     const ort  = str(r["ort"] ?? r["adresse"] ?? r["address"]).trim();
 
-    // Firmen-Sheet: preis (lose), sackware, industriewar
     const baseLose = toNum(r["preis"]);
     const baseSack = toNum(r["sackware"]);
     const baseInd  = toNum(r["industriewar"] ?? r["industrieware"]);
@@ -394,9 +413,47 @@ async function loadFirms(){
 }
 
 /* =========================
+   NEU: Lieferungen laden (Kunde / firma / anzahl)
+   ========================= */
+async function loadDeliveries(){
+  try{
+    const rows = await parseCsv(CONFIG.deliveriesCsvUrl);
+
+    const mapTmp = new Map();
+    for(const r of rows){
+      const kunde = str(r["kunde"] ?? r["kundenname"] ?? r["customer"]).trim();
+      const firma = str(r["firma"] ?? r["firm"] ?? r["lieferant"]).trim();
+      const anzahl = toNum(r["anzahl"] ?? r["count"] ?? r["lieferungen"]);
+
+      if(!kunde || !firma) continue;
+
+      const k = normName(kunde);
+      const arr = mapTmp.get(k) || [];
+      arr.push({ firma, anzahl: (isFinite(anzahl) ? anzahl : 0) });
+      mapTmp.set(k, arr);
+    }
+
+    // sortiere pro Kunde nach Anzahl (absteigend)
+    for(const [k, arr] of mapTmp.entries()){
+      arr.sort((a,b)=>(b.anzahl||0)-(a.anzahl||0));
+    }
+
+    deliveriesByCustomer = mapTmp;
+    deliveriesLoaded = true;
+  }catch(e){
+    console.warn("Deliveries load error:", e);
+    deliveriesByCustomer = new Map();
+    deliveriesLoaded = false;
+  }
+}
+
+/* =========================
    Geocoding + Cache
    ========================= */
 function normAddr(a){ return str(a).trim().replace(/\s+/g,' '); }
+function normName(s){
+  return str(s).trim().toLowerCase().replace(/\s+/g,' ');
+}
 
 function applyCacheCoordsOnly(){
   customers.forEach(c=>{
@@ -441,7 +498,9 @@ function updateLoadStatusCounts(prefix=""){
   const totalF = firms.length;
   const doneC = customers.filter(c=>isFinite(c.lat)&&isFinite(c.lon)).length;
   const doneF = firms.filter(f=>isFinite(f.lat)&&isFinite(f.lon)).length;
-  setLoadStatus(`${prefix}${prefix? " · ":""}Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}`);
+
+  const delivTxt = deliveriesLoaded ? ` · Aufträge ✓` : ` · Aufträge —`;
+  setLoadStatus(`${prefix}${prefix? " · ":""}Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}${delivTxt}`);
 }
 
 async function geocodeAll(){
@@ -453,7 +512,6 @@ async function geocodeAll(){
 
   setLoadStatus(`Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}`);
 
-  // Kunden
   for(const c of customers){
     if(isFinite(c.lat) && isFinite(c.lon)) continue;
     const coords = await geocodeAddress(c.address);
@@ -465,7 +523,6 @@ async function geocodeAll(){
     await sleep(CONFIG.geocodeDelayMs);
   }
 
-  // Firmen
   for(const f of firms){
     if(isFinite(f.lat) && isFinite(f.lon)) continue;
     const coords = await geocodeAddress(f.address);
@@ -489,21 +546,61 @@ function customerTriangleIcon(){
   return L.divIcon({ html:`<div class="tri"></div>`, className:"", iconSize:[20,18], iconAnchor:[10,18] });
 }
 
+function buildDeliveriesHtml(customerName){
+  const k = normName(customerName);
+  const arr = deliveriesByCustomer.get(k) || [];
+  if(!arr.length){
+    return `<div class="deliv"><div class="t">Beliefert von</div><div class="small">Keine Einträge gefunden.</div></div>`;
+  }
+
+  let total = 0;
+  for(const a of arr) total += (isFinite(a.anzahl) ? a.anzahl : 0);
+
+  const rows = arr.map(x=>{
+    const n = isFinite(x.anzahl) ? x.anzahl : 0;
+    return `<div class="row"><div class="f">${esc(x.firma)}</div><div class="n">${esc(String(n))}x</div></div>`;
+  }).join("");
+
+  return `
+    <div class="deliv">
+      <div class="t">Beliefert von <span class="small">(gesamt ${esc(String(total))}x)</span></div>
+      ${rows}
+    </div>
+  `;
+}
+
 function renderMarkers(){
   customerMarkers.forEach(m=>m.remove());
   firmMarkers.forEach(m=>m.remove());
   customerMarkers=[]; firmMarkers=[];
 
-  // Kunden
   customers.forEach(c=>{
     if(!isFinite(c.lat)||!isFinite(c.lon)) return;
     const m = L.marker([c.lat,c.lon], {icon: customerTriangleIcon()}).addTo(map);
+
+    // Tooltip bleibt kurz
     m.bindTooltip(`<b>${esc(c.name)}</b><br>${esc(c.address)}`, {direction:"top"});
-    m.on("click", ()=>selectCustomer(c));
+
+    // Klick: Kunde wählen + Popup mit Lieferungen anzeigen
+    m.on("click", ()=>{
+      selectCustomer(c);
+
+      const html = `
+        <div class="rcard">
+          <div class="h">${esc(c.name)}</div>
+          <div class="small">${esc(c.address)}</div>
+          ${buildDeliveriesHtml(c.name)}
+        </div>
+      `;
+      L.popup({closeButton:true, autoClose:true, closeOnClick:true})
+        .setLatLng([c.lat, c.lon])
+        .setContent(html)
+        .openOn(map);
+    });
+
     customerMarkers.push(m);
   });
 
-  // Firmen
   firms.forEach(f=>{
     if(!isFinite(f.lat)||!isFinite(f.lon)) return;
     const m = L.circleMarker([f.lat,f.lon], {
@@ -526,7 +623,6 @@ function initUI(){
     document.getElementById("panel").classList.add("hidden");
   });
 
-  // Autocomplete
   const input = document.getElementById("custSearch");
   const ac = document.getElementById("ac");
 
@@ -550,6 +646,21 @@ function initUI(){
       if(found){
         selectCustomer(found);
         ac.style.display="none";
+
+        // Optional: Popup auch bei Enter anzeigen (wenn Koords da sind)
+        if(isFinite(found.lat) && isFinite(found.lon)){
+          const html = `
+            <div class="rcard">
+              <div class="h">${esc(found.name)}</div>
+              <div class="small">${esc(found.address)}</div>
+              ${buildDeliveriesHtml(found.name)}
+            </div>
+          `;
+          L.popup({closeButton:true, autoClose:true, closeOnClick:true})
+            .setLatLng([found.lat, found.lon])
+            .setContent(html)
+            .openOn(map);
+        }
       }
     }
   });
@@ -659,15 +770,14 @@ function calculate(){
     const base = isFinite(override) ? override : f.base[product];
     if(!isFinite(base) || base <= 0) continue;
 
-    // Pellet-Formel (€/t)
     const freightPerT = (kmAir * freightPerKm / qtyT) * factor;
     const deliveredPerT = base + freightPerT;
     const deliveredTotal = deliveredPerT * qtyT;
 
     let marginPerT = null, marginTotal = null;
     if(isFinite(targetVk)){
-      marginPerT = targetVk - deliveredPerT;   // €/t
-      marginTotal = marginPerT * qtyT;         // €
+      marginPerT = targetVk - deliveredPerT;
+      marginTotal = marginPerT * qtyT;
     }
 
     results.push({f, kmAir, base, freightPerT, deliveredPerT, deliveredTotal, marginPerT, marginTotal});
@@ -766,7 +876,6 @@ async function drawRouteOSRM(from, to){
     console.warn("Routing error", e);
   }
 
-  // Fallback
   routeLayer = L.polyline([[from.lat,from.lon],[to.lat,to.lon]], {weight:4}).addTo(map);
   map.fitBounds(routeLayer.getBounds().pad(0.25), {animate:true});
   document.getElementById("kpiRoute").textContent = "Fallback";
@@ -792,7 +901,6 @@ function showDetail(row, inputs, routeKm){
   const routeText = (routeKm && isFinite(routeKm)) ? `${fmt(routeKm,1)} km` : "—";
   const airText = `${fmt(row.kmAir,1)} km`;
 
-  // Marge/Gewinn
   const marginPerT = isFinite(targetVk) ? (targetVk - row.deliveredPerT) : NaN;
   const profitTotal = isFinite(marginPerT) ? (marginPerT * qtyT) : NaN;
 
