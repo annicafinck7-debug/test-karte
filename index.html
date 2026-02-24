@@ -13,9 +13,10 @@
     html,body{height:100%;margin:0;background:#0b0f14}
     #map{height:100%;width:100%}
 
+    /* Topbar */
     .topbar{
       position:absolute; top:12px; left:12px; right:12px; z-index:3000;
-      display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+      display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;
       padding:10px 12px; border-radius:14px;
       background:rgba(15,20,28,.92); backdrop-filter: blur(10px);
       border:1px solid rgba(255,255,255,.10);
@@ -56,7 +57,19 @@
       color:#04110a;
     }
     .btn:active{transform:translateY(1px)}
+    #loadStatus{
+      margin-left:auto;
+      align-self:center;
+      font-weight:900;
+      opacity:.85;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.06);
+      white-space:nowrap;
+    }
 
+    /* Autocomplete */
     .ac{
       position:absolute; z-index:4000;
       background:rgba(15,20,28,.98);
@@ -78,12 +91,13 @@
     }
     .ac .item:last-child{border-bottom:none}
     .ac .item:hover{background:rgba(255,255,255,.06)}
-    .ac .name{font-weight:800}
+    .ac .name{font-weight:900}
     .ac .addr{font-size:12px; opacity:.75; margin-top:2px}
 
+    /* Panel */
     .panel{
       position:absolute; top:88px; right:12px; z-index:2500;
-      width:600px; max-height: calc(100vh - 110px);
+      width:640px; max-height: calc(100vh - 110px);
       display:flex; flex-direction:column;
       background:rgba(15,20,28,.92); backdrop-filter: blur(10px);
       border:1px solid rgba(255,255,255,.10);
@@ -119,6 +133,7 @@
     .kpi .v{font-weight:900; font-size:16px; margin-top:2px}
     .small{font-size:12px; opacity:.78}
 
+    /* Detail box */
     .detail{
       border:1px solid rgba(255,255,255,.10);
       background:rgba(255,255,255,.05);
@@ -134,8 +149,9 @@
     }
     .kv{display:flex; justify-content:space-between; gap:10px}
     .k{opacity:.78}
-    .v{font-weight:800}
+    .v{font-weight:900}
 
+    /* Table */
     table{width:100%; border-collapse:collapse; font-size:13px;}
     th,td{padding:10px 6px; border-bottom:1px solid rgba(255,255,255,.08); vertical-align:top; text-align:left;}
     th{font-size:12px; opacity:.8; font-weight:900; position:sticky; top:0; background:rgba(15,20,28,.98)}
@@ -152,6 +168,7 @@
     .mid{background:rgba(255,200,0,.12); border-color:rgba(255,200,0,.30)}
     .bad{background:rgba(255,80,80,.12); border-color:rgba(255,80,80,.30)}
 
+    /* Leaflet popup dark */
     .leaflet-popup-content-wrapper, .leaflet-popup-tip{
       background:#0f1520; color:#e9eef6;
       border:1px solid rgba(255,255,255,.10);
@@ -167,6 +184,7 @@
     }
     .rcard .note{font-size:12px; opacity:.75; margin-top:6px}
 
+    /* customer triangle */
     .tri{
       width:0;height:0;
       border-left:10px solid transparent;
@@ -180,7 +198,7 @@
 <body>
 <div id="map"></div>
 
-<div class="topbar">
+<div class="topbar" id="topbar">
   <div class="brand">Verkaufs-Karte</div>
 
   <div class="field w240">
@@ -224,13 +242,15 @@
 
   <button class="btn primary" id="btnCalc">Berechnen</button>
   <button class="btn" id="btnGeo">Geocoden</button>
+
+  <div id="loadStatus">—</div>
 </div>
 
 <div id="ac" class="ac"></div>
 
 <div id="panel" class="panel">
   <div id="panelHeader" class="panel-h">
-    <div class="t">Ergebnisse (alle passenden)</div>
+    <div class="t">Ergebnisse</div>
     <button id="closePanel" class="x" title="Schließen">✕</button>
   </div>
   <div class="panel-b">
@@ -252,14 +272,13 @@
       </div>
     </div>
 
-    <!-- NEW: Detail Box -->
     <div class="detail" id="detailBox" style="display:none">
       <div class="title" id="detailTitle">Details</div>
       <div class="detail-grid" id="detailGrid"></div>
     </div>
 
     <div class="small" style="margin:6px 0 10px 0">
-      Klick auf Zeile: echte Strecke + kopiert Angebotstext. Rechtsklick auf Firma: Preis ändern (Enter).
+      Klick auf Zeile: Route + Details + kopiert Angebotstext. Rechtsklick auf Firma: Preis ändern (Enter).
     </div>
 
     <div id="results"></div>
@@ -267,30 +286,41 @@
 </div>
 
 <script>
+/* =========================
+   SHEETS (deine Links)
+   ========================= */
 const CONFIG = {
   firmsCsvUrl: "https://docs.google.com/spreadsheets/d/1f1oD1TlYWPRbD12d05yIGkqmXVygVt3ZHLk9U0bKoTs/gviz/tq?tqx=out:csv&gid=0",
   customersCsvUrl: "https://docs.google.com/spreadsheets/d/1DaiLyZbhJkdSQ1PHbJQmguIrDnGrrhiAVgJC4PJO8vA/gviz/tq?tqx=out:csv&gid=0",
   geocodeDelayMs: 1100
 };
 
-const LS_GEO_CACHE_KEY = "salesMap_geoCache_v5";
-const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v5";
-const LS_PANEL_POS_KEY = "salesMap_panelPos_v5";
+/* =========================
+   LocalStorage Keys
+   ========================= */
+const LS_GEO_CACHE_KEY = "salesMap_geoCache_v6";
+const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v6";
+const LS_PANEL_POS_KEY = "salesMap_panelPos_v6";
 
 let geoCache = loadLS(LS_GEO_CACHE_KEY, {});
 let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
 
+/* =========================
+   State
+   ========================= */
 let map, customers=[], firms=[];
 let customerMarkers=[], firmMarkers=[];
 let selectedCustomer=null;
 let routeLayer=null;
 let lastRouteKm=null;
 
+/* =========================
+   Init
+   ========================= */
 init();
 
 async function init(){
   map = L.map('map', { worldCopyJump:true }).setView([51.2, 10.4], 6);
-
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap &copy; CARTO'
@@ -299,12 +329,17 @@ async function init(){
   initPanelDrag();
   initUI();
 
+  setLoadStatus("Lade Tabellen …");
   await Promise.all([loadCustomers(), loadFirms()]);
   applyCacheCoordsOnly();
   renderMarkers();
   updateCustomerKpi(null);
+  updateLoadStatusCounts();
 }
 
+/* =========================
+   CSV with header normalize
+   ========================= */
 function parseCsv(url){
   return new Promise((resolve, reject)=>{
     Papa.parse(url, {
@@ -321,9 +356,17 @@ function parseCsv(url){
 async function loadCustomers(){
   const rows = await parseCsv(CONFIG.customersCsvUrl);
   customers = rows.map((r, idx)=>{
+    // robuste Felder
     const name = str(r["name"] ?? r["kundenname"] ?? r["kunde"] ?? r["firma"] ?? r["unternehmen"]).trim();
     const ort  = str(r["ort"] ?? r["adresse"] ?? r["address"]).trim();
-    return { id:"C"+idx, name: name || ort || "Kunde", address: ort, lat:NaN, lon:NaN, raw:r };
+    return {
+      id:"C"+idx,
+      name: name || ort || "Kunde",
+      address: ort,
+      lat: NaN,
+      lon: NaN,
+      raw: r
+    };
   }).filter(x=>x.address);
 }
 
@@ -333,6 +376,7 @@ async function loadFirms(){
     const name = str(r["firma"] ?? r["name"]).trim();
     const ort  = str(r["ort"] ?? r["adresse"] ?? r["address"]).trim();
 
+    // Firmen-Sheet: preis (lose), sackware, industriewar
     const baseLose = toNum(r["preis"]);
     const baseSack = toNum(r["sackware"]);
     const baseInd  = toNum(r["industriewar"] ?? r["industrieware"]);
@@ -342,12 +386,16 @@ async function loadFirms(){
       name: name || "Firma",
       address: ort,
       base:{ lose: baseLose, sackware: baseSack, industrieware: baseInd },
-      lat:NaN, lon:NaN,
-      raw:r
+      lat: NaN,
+      lon: NaN,
+      raw: r
     };
   }).filter(x=>x.name && x.address);
 }
 
+/* =========================
+   Geocoding + Cache
+   ========================= */
 function normAddr(a){ return str(a).trim().replace(/\s+/g,' '); }
 
 function applyCacheCoordsOnly(){
@@ -382,27 +430,61 @@ async function geocodeAddress(address){
         return {lat, lon};
       }
     }
-  }catch(e){ console.warn("Geocode error", e); }
+  }catch(e){
+    console.warn("Geocode error", e);
+  }
   return null;
 }
 
+function updateLoadStatusCounts(prefix=""){
+  const totalC = customers.length;
+  const totalF = firms.length;
+  const doneC = customers.filter(c=>isFinite(c.lat)&&isFinite(c.lon)).length;
+  const doneF = firms.filter(f=>isFinite(f.lat)&&isFinite(f.lon)).length;
+  setLoadStatus(`${prefix}${prefix? " · ":""}Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}`);
+}
+
 async function geocodeAll(){
+  const totalC = customers.length;
+  const totalF = firms.length;
+
+  let doneC = customers.filter(c=>isFinite(c.lat)&&isFinite(c.lon)).length;
+  let doneF = firms.filter(f=>isFinite(f.lat)&&isFinite(f.lon)).length;
+
+  setLoadStatus(`Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}`);
+
+  // Kunden
   for(const c of customers){
     if(isFinite(c.lat) && isFinite(c.lon)) continue;
     const coords = await geocodeAddress(c.address);
-    if(coords){ c.lat=coords.lat; c.lon=coords.lon; }
+    if(coords){
+      c.lat = coords.lat; c.lon = coords.lon;
+      doneC++;
+      setLoadStatus(`Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}`);
+    }
     await sleep(CONFIG.geocodeDelayMs);
   }
+
+  // Firmen
   for(const f of firms){
     if(isFinite(f.lat) && isFinite(f.lon)) continue;
     const coords = await geocodeAddress(f.address);
-    if(coords){ f.lat=coords.lat; f.lon=coords.lon; }
+    if(coords){
+      f.lat = coords.lat; f.lon = coords.lon;
+      doneF++;
+      setLoadStatus(`Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}`);
+    }
     await sleep(CONFIG.geocodeDelayMs);
   }
+
   renderMarkers();
   if(selectedCustomer) updateCustomerKpi(selectedCustomer);
+  setLoadStatus(`✅ Fertig: Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}`);
 }
 
+/* =========================
+   Markers
+   ========================= */
 function customerTriangleIcon(){
   return L.divIcon({ html:`<div class="tri"></div>`, className:"", iconSize:[20,18], iconAnchor:[10,18] });
 }
@@ -412,6 +494,7 @@ function renderMarkers(){
   firmMarkers.forEach(m=>m.remove());
   customerMarkers=[]; firmMarkers=[];
 
+  // Kunden
   customers.forEach(c=>{
     if(!isFinite(c.lat)||!isFinite(c.lon)) return;
     const m = L.marker([c.lat,c.lon], {icon: customerTriangleIcon()}).addTo(map);
@@ -420,6 +503,7 @@ function renderMarkers(){
     customerMarkers.push(m);
   });
 
+  // Firmen
   firms.forEach(f=>{
     if(!isFinite(f.lat)||!isFinite(f.lon)) return;
     const m = L.circleMarker([f.lat,f.lon], {
@@ -431,6 +515,9 @@ function renderMarkers(){
   });
 }
 
+/* =========================
+   UI + Autocomplete
+   ========================= */
 function initUI(){
   document.getElementById("btnGeo").addEventListener("click", geocodeAll);
   document.getElementById("btnCalc").addEventListener("click", calculate);
@@ -439,6 +526,7 @@ function initUI(){
     document.getElementById("panel").classList.add("hidden");
   });
 
+  // Autocomplete
   const input = document.getElementById("custSearch");
   const ac = document.getElementById("ac");
 
@@ -459,7 +547,10 @@ function initUI(){
     if(e.key === "Enter"){
       const q = input.value.trim().toLowerCase();
       const found = bestCustomerMatch(q);
-      if(found){ selectCustomer(found); ac.style.display="none"; }
+      if(found){
+        selectCustomer(found);
+        ac.style.display="none";
+      }
     }
   });
 
@@ -489,6 +580,7 @@ function initUI(){
       if(name.startsWith(q) || addr.startsWith(q)) starts.push(c);
       else if(name.includes(q) || addr.includes(q)) contains.push(c);
     }
+
     const list=[...starts,...contains].slice(0,12);
     if(!list.length){ ac.style.display="none"; return; }
 
@@ -496,23 +588,34 @@ function initUI(){
       const div=document.createElement("div");
       div.className="item";
       div.innerHTML = `<div class="name">${esc(c.name)}</div><div class="addr">${esc(c.address)}</div>`;
-      div.addEventListener("click", ()=>{ selectCustomer(c); ac.style.display="none"; input.blur(); });
+      div.addEventListener("click", ()=>{
+        selectCustomer(c);
+        ac.style.display="none";
+        input.blur();
+      });
       ac.appendChild(div);
     }
     ac.style.display="block";
   }
 }
 
+/* =========================
+   Customer selection
+   ========================= */
 function selectCustomer(c){
   selectedCustomer = c;
   updateCustomerKpi(c);
   hideDetail();
+
   if(isFinite(c.lat)&&isFinite(c.lon)){
     map.setView([c.lat,c.lon], Math.max(map.getZoom(), 7), {animate:true});
   }
   document.getElementById("panel").classList.remove("hidden");
 }
 
+/* =========================
+   Inputs
+   ========================= */
 function getInputs(){
   const factor = toNum(document.getElementById("factor").value);
   return {
@@ -525,6 +628,9 @@ function getInputs(){
   };
 }
 
+/* =========================
+   Calculate (uses Luftlinie for km)
+   ========================= */
 function calculate(){
   const out = document.getElementById("results");
   out.innerHTML = "";
@@ -537,10 +643,12 @@ function calculate(){
   }
 
   const {product, radiusKm, qtyT, freightPerKm, factor, targetVk} = getInputs();
+
   document.getElementById("kpiQty").textContent = `Menge: ${fmt(qtyT,1)} t`;
   document.getElementById("kpiRoute").textContent = "—";
 
   const results = [];
+
   for(const f of firms){
     if(!isFinite(f.lat)||!isFinite(f.lon)) continue;
 
@@ -551,14 +659,15 @@ function calculate(){
     const base = isFinite(override) ? override : f.base[product];
     if(!isFinite(base) || base <= 0) continue;
 
+    // Pellet-Formel (€/t)
     const freightPerT = (kmAir * freightPerKm / qtyT) * factor;
     const deliveredPerT = base + freightPerT;
     const deliveredTotal = deliveredPerT * qtyT;
 
     let marginPerT = null, marginTotal = null;
     if(isFinite(targetVk)){
-      marginPerT = targetVk - deliveredPerT;
-      marginTotal = marginPerT * qtyT;
+      marginPerT = targetVk - deliveredPerT;   // €/t
+      marginTotal = marginPerT * qtyT;         // €
     }
 
     results.push({f, kmAir, base, freightPerT, deliveredPerT, deliveredTotal, marginPerT, marginTotal});
@@ -598,15 +707,17 @@ function calculate(){
       <td>${fmt(row.kmAir,0)}</td>
       <td>
         <b>${fmt(row.deliveredPerT)} €/t</b><br>
-        <span class="small">${fmt(row.deliveredTotal)} € für ${fmt(getInputs().qtyT,1)} t</span>
+        <span class="small">${fmt(row.deliveredTotal)} € für ${fmt(qtyT,1)} t</span>
       </td>
       <td>${badge}</td>
     `;
+
     tr.addEventListener("click", async ()=>{
       const routeKm = await drawRouteOSRM(selectedCustomer, row.f);
       showDetail(row, getInputs(), routeKm);
       await copyOfferText(selectedCustomer, row, getInputs(), routeKm);
     });
+
     tbody.appendChild(tr);
   }
 
@@ -624,6 +735,9 @@ function makeBadge(row, targetVk){
   return `<span class="badge bad">${fmt(m)} €/t</span>`;
 }
 
+/* =========================
+   Routing OSRM
+   ========================= */
 async function drawRouteOSRM(from, to){
   if(routeLayer){
     try{ map.removeLayer(routeLayer); }catch(e){}
@@ -652,14 +766,20 @@ async function drawRouteOSRM(from, to){
     console.warn("Routing error", e);
   }
 
-  // fallback
+  // Fallback
   routeLayer = L.polyline([[from.lat,from.lon],[to.lat,to.lon]], {weight:4}).addTo(map);
   map.fitBounds(routeLayer.getBounds().pad(0.25), {animate:true});
   document.getElementById("kpiRoute").textContent = "Fallback";
   return null;
 }
 
-/* ===== NEW: Detail Box ===== */
+/* =========================
+   Detail Box
+   ========================= */
+function kv(k, v){
+  return `<div class="kv"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`;
+}
+
 function showDetail(row, inputs, routeKm){
   const {product, qtyT, freightPerKm, factor, targetVk} = inputs;
 
@@ -672,8 +792,9 @@ function showDetail(row, inputs, routeKm){
   const routeText = (routeKm && isFinite(routeKm)) ? `${fmt(routeKm,1)} km` : "—";
   const airText = `${fmt(row.kmAir,1)} km`;
 
+  // Marge/Gewinn
   const marginPerT = isFinite(targetVk) ? (targetVk - row.deliveredPerT) : NaN;
-  const marginTotal = isFinite(marginPerT) ? (marginPerT * qtyT) : NaN;
+  const profitTotal = isFinite(marginPerT) ? (marginPerT * qtyT) : NaN;
 
   grid.innerHTML = `
     ${kv("Adresse", row.f.address)}
@@ -687,14 +808,12 @@ function showDetail(row, inputs, routeKm){
     ${kv("Gesamtpreis", `${fmt(row.deliveredTotal)} €`)}
     ${kv("Ziel-VK", isFinite(targetVk) ? `${fmt(targetVk)} €/t` : "—")}
     ${kv("Marge", isFinite(marginPerT) ? `${fmt(marginPerT)} €/t` : "—")}
-    ${kv("Gewinn gesamt", isFinite(marginTotal) ? `${fmt(marginTotal)} €` : "—")}
+    ${kv("Gewinn gesamt", isFinite(profitTotal) ? `${fmt(profitTotal)} €` : "—")}
+    ${kv("Fracht €/km", `${fmt(freightPerKm)} €`)}
+    ${kv("Faktor", `${fmt(factor,2)}`)}
   `;
 
   detailBox.style.display = "block";
-}
-
-function kv(k, v){
-  return `<div class="kv"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`;
 }
 
 function hideDetail(){
@@ -703,6 +822,9 @@ function hideDetail(){
   document.getElementById("detailTitle").textContent="Details";
 }
 
+/* =========================
+   Right click price edit (per product)
+   ========================= */
 function openRightClickPricePopup(firm, latlng){
   const product = document.getElementById("product").value;
   const currentOverride = priceOverrides?.[firm.id]?.[product];
@@ -737,15 +859,20 @@ function openRightClickPricePopup(firm, latlng){
           calculate();
         }
       }
-      if(e.key==="Escape") map.closePopup(popup);
+      if(e.key==="Escape"){
+        map.closePopup(popup);
+      }
     });
   }, 30);
 }
 
+/* =========================
+   Copy offer text
+   ========================= */
 async function copyOfferText(customer, row, inputs, routeKm){
   const {product, qtyT, freightPerKm, factor, targetVk} = inputs;
   const marginPerT = isFinite(targetVk) ? (targetVk - row.deliveredPerT) : NaN;
-  const marginTotal = isFinite(marginPerT) ? (marginPerT * qtyT) : NaN;
+  const profitTotal = isFinite(marginPerT) ? (marginPerT * qtyT) : NaN;
 
   const text =
 `Angebots-Vorschlag
@@ -760,13 +887,13 @@ Luftlinie: ${row.kmAir.toFixed(1)} km
 Route: ${routeKm && isFinite(routeKm) ? routeKm.toFixed(1) : "—"} km
 
 Basis: ${round2(row.base)} €/t
-Fracht (Formel): ${round2(row.freightPerT)} €/t
+Fracht: ${round2(row.freightPerT)} €/t
 Lieferpreis: ${round2(row.deliveredPerT)} €/t
 Gesamt: ${round2(row.deliveredTotal)} € für ${qtyT} t
 
 Ziel-VK: ${isFinite(targetVk) ? round2(targetVk) : "—"} €/t
 Marge: ${isFinite(marginPerT) ? round2(marginPerT) : "—"} €/t
-Gewinn gesamt: ${isFinite(marginTotal) ? round2(marginTotal) : "—"} €
+Gewinn gesamt: ${isFinite(profitTotal) ? round2(profitTotal) : "—"} €
 
 Fracht €/km: ${freightPerKm} | Faktor: ${factor}`;
 
@@ -782,6 +909,9 @@ Fracht €/km: ${freightPerKm} | Faktor: ${factor}`;
   }
 }
 
+/* =========================
+   Panel drag + persist
+   ========================= */
 function initPanelDrag(){
   const panel = document.getElementById("panel");
   const header = document.getElementById("panelHeader");
@@ -802,6 +932,7 @@ function initPanelDrag(){
     panel.style.right="auto";
     e.preventDefault();
   });
+
   window.addEventListener("mousemove",(e)=>{
     if(!dragging) return;
     const x = Math.max(6, sl + (e.clientX-sx));
@@ -809,6 +940,7 @@ function initPanelDrag(){
     panel.style.left = x+"px";
     panel.style.top  = y+"px";
   });
+
   window.addEventListener("mouseup",()=>{
     if(!dragging) return;
     dragging=false;
@@ -817,6 +949,9 @@ function initPanelDrag(){
   });
 }
 
+/* =========================
+   KPI updates
+   ========================= */
 function updateCustomerKpi(c){
   if(!c){
     document.getElementById("kpiCustomer").textContent = "—";
@@ -829,6 +964,14 @@ function updateCustomerKpi(c){
   document.getElementById("kpiCustomer").textContent = c.name || "—";
   document.getElementById("kpiCustomerAddr").textContent = c.address || "—";
   document.getElementById("kpiRoute").textContent = "—";
+}
+
+/* =========================
+   Helpers
+   ========================= */
+function setLoadStatus(text){
+  const el = document.getElementById("loadStatus");
+  if(el) el.textContent = text;
 }
 
 function toNum(v){
@@ -847,7 +990,7 @@ function round2(n){ return Math.round(n*100)/100; }
 function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
 function esc(s){
   return String(s).replace(/[&<>"']/g, m=>({
-    "&":"&amp;","<":"&lt;",">":"&lt;",'"':"&quot;","'":"&#039;"
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
   }[m]));
 }
 function productLabel(p){
