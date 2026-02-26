@@ -35,9 +35,9 @@
       --btn-primary:#22c55e;
       --btn-primary-text:#052e16;
 
-      /* Firms (NEW COLORS) */
+      /* Firms */
       --firm-stroke:#0f172a;
-      --firm-fill:#f59e0b; /* default orange */
+      --firm-fill:#f59e0b;
       --firm-stroke-weight:2;
 
       /* Customer triangle */
@@ -49,15 +49,7 @@
       --popup-border:rgba(15,23,42,.12);
     }
 
-    html,body{
-      height:100%;
-      margin:0;
-      padding:0;
-      background:#ffffff;
-      overflow:hidden;
-    }
-
-    /* Karte volle Höhe */
+    html,body{height:100%;margin:0;background:#ffffff}
     #map{
       position:absolute;
       inset:0;
@@ -65,41 +57,36 @@
       height:100%;
     }
 
-    /* Topbar (FLACH) */
+    /* ✅ TOPBAR HOCH: Schlitz weg */
     .topbar{
       position:fixed;
-      top:12px; left:12px; right:12px;
+      top:0; left:0; right:0;          /* ✅ war: 12px */
       z-index:3000;
 
-      display:flex;
-      gap:10px;
-      align-items:center;     /* ✅ statt flex-end */
-      flex-wrap:nowrap;       /* ✅ kein Umbruch */
-      overflow-x:auto;        /* ✅ scroll statt zweite Zeile */
+      display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;
 
-      padding:8px 12px;       /* ✅ flacher */
-      border-radius:14px;
+      padding:10px 12px;
+      border-radius:0 0 14px 14px;     /* ✅ oben gerade, unten rund */
       background:var(--ui-bg);
       border:1px solid var(--ui-border);
+      border-top:none;                  /* ✅ kein Rand oben (sauber bündig) */
       box-shadow:var(--ui-shadow);
       font:14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
       color:var(--ui-text);
     }
 
     .brand{font-weight:900; white-space:nowrap; margin-right:4px;}
-
-    .field{display:flex; flex-direction:column; gap:0}
-    .field label{display:none;} /* ✅ spart Höhe */
-
+    .field{display:flex; flex-direction:column; gap:4px}
+    .field label{font-size:11px; color:var(--ui-muted); margin-left:2px}
     .field input,.field select{
-      height:32px;            /* ✅ flacher */
+      height:34px;
       padding:0 10px;
       border-radius:10px;
       border:1px solid var(--inp-border);
       background:var(--inp-bg);
       color:var(--inp-text);
       outline:none;
-      min-width:120px;
+      min-width: 120px;
     }
     .field input::placeholder{color:var(--inp-ph)}
     .field input:focus,.field select:focus{border-color:var(--inp-focus); box-shadow:0 0 0 3px rgba(37,99,235,.12)}
@@ -107,7 +94,7 @@
     .w140{min-width:140px}
 
     .btn{
-      height:32px;            /* ✅ flacher */
+      height:34px;
       padding:0 12px;
       border-radius:10px;
       border:1px solid var(--btn-border);
@@ -115,7 +102,6 @@
       color:var(--btn-text);
       cursor:pointer;
       font-weight:800;
-      flex:0 0 auto;
     }
     .btn.primary{
       background:var(--btn-primary);
@@ -123,7 +109,6 @@
       color:var(--btn-primary-text);
     }
     .btn:active{transform:translateY(1px)}
-
     #loadStatus{
       margin-left:auto;
       align-self:center;
@@ -135,7 +120,6 @@
       border:1px solid var(--ui-border);
       background:var(--ui-soft);
       white-space:nowrap;
-      flex:0 0 auto;
     }
 
     /* Autocomplete */
@@ -220,7 +204,6 @@
     .k{color:var(--ui-muted)}
     .v{font-weight:900}
 
-    /* Table */
     table{width:100%; border-collapse:collapse; font-size:13px;}
     th,td{padding:10px 6px; border-bottom:1px solid var(--ui-border); vertical-align:top; text-align:left;}
     th{
@@ -241,7 +224,6 @@
     .mid{background:rgba(245,158,11,.12); border-color:rgba(245,158,11,.25); color:#92400e}
     .bad{background:rgba(239,68,68,.10); border-color:rgba(239,68,68,.25); color:#991b1b}
 
-    /* Leaflet popup */
     .leaflet-popup-content-wrapper, .leaflet-popup-tip{
       background:var(--popup-bg);
       color:var(--popup-text);
@@ -259,7 +241,6 @@
     }
     .rcard .note{font-size:12px; color:var(--ui-muted); margin-top:6px}
 
-    /* customer triangle */
     .tri{
       width:0;height:0;
       border-left:10px solid transparent;
@@ -268,7 +249,6 @@
       filter: drop-shadow(0 3px 6px rgba(2,6,23,.25));
     }
 
-    /* Lieferungen Liste im Popup */
     .deliv{
       margin-top:8px;
       border-top:1px solid var(--ui-border);
@@ -281,7 +261,6 @@
     .deliv .f{font-weight:800}
     .deliv .n{font-weight:900; opacity:.95}
 
-    /* Improve Leaflet control contrast a bit on white */
     .leaflet-control-zoom a{
       color:#0f172a !important;
       background:#ffffff !important;
@@ -391,6 +370,9 @@ const CONFIG = {
   geocodeDelayMs: 1100
 };
 
+/* =========================
+   LocalStorage Keys
+   ========================= */
 const LS_GEO_CACHE_KEY = "salesMap_geoCache_v6";
 const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v6";
 const LS_PANEL_POS_KEY = "salesMap_panelPos_v6";
@@ -398,6 +380,9 @@ const LS_PANEL_POS_KEY = "salesMap_panelPos_v6";
 let geoCache = loadLS(LS_GEO_CACHE_KEY, {});
 let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
 
+/* =========================
+   State
+   ========================= */
 let map, customers=[], firms=[];
 let customerMarkers=[], firmMarkers=[];
 let selectedCustomer=null;
@@ -407,6 +392,9 @@ let lastRouteKm=null;
 let deliveriesByCustomer = new Map();
 let deliveriesLoaded = false;
 
+/* =========================
+   Init
+   ========================= */
 init();
 
 async function init(){
@@ -428,6 +416,9 @@ async function init(){
   updateLoadStatusCounts();
 }
 
+/* =========================
+   CSV with header normalize
+   ========================= */
 function parseCsv(url){
   return new Promise((resolve, reject)=>{
     Papa.parse(url, {
@@ -488,7 +479,6 @@ async function loadDeliveries(){
       const kunde = str(r["kunde"] ?? r["kundenname"] ?? r["customer"]).trim();
       const firma = str(r["firma"] ?? r["firm"] ?? r["lieferant"]).trim();
       const anzahl = toNum(r["anzahl"] ?? r["count"] ?? r["lieferungen"]);
-
       if(!kunde || !firma) continue;
 
       const k = normName(kunde);
@@ -510,6 +500,9 @@ async function loadDeliveries(){
   }
 }
 
+/* =========================
+   Geocoding + Cache
+   ========================= */
 function normAddr(a){ return str(a).trim().replace(/\s+/g,' '); }
 function normName(s){ return str(s).trim().toLowerCase().replace(/\s+/g,' '); }
 
@@ -597,6 +590,9 @@ async function geocodeAll(){
   setLoadStatus(`✅ Fertig: Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}`);
 }
 
+/* =========================
+   Markers
+   ========================= */
 function customerTriangleIcon(){
   return L.divIcon({ html:`<div class="tri"></div>`, className:"", iconSize:[20,18], iconAnchor:[10,18] });
 }
@@ -681,10 +677,14 @@ function renderMarkers(){
   });
 }
 
+/* ✅ FIX: Leaflet nach Layout-Änderung einmal neu berechnen */
 function invalidateMapSizeSoon(){
   setTimeout(()=>{ try{ map.invalidateSize(); }catch(e){} }, 50);
 }
 
+/* =========================
+   UI + Autocomplete
+   ========================= */
 function initUI(){
   document.getElementById("btnGeo").addEventListener("click", geocodeAll);
   document.getElementById("btnCalc").addEventListener("click", calculate);
@@ -785,10 +785,12 @@ function initUI(){
   }
 }
 
+/* =========================
+   Customer selection
+   ========================= */
 function selectCustomer(c){
   selectedCustomer = c;
   updateCustomerKpi(c);
-  hideDetail();
 
   if(isFinite(c.lat)&&isFinite(c.lon)){
     map.setView([c.lat,c.lon], Math.max(map.getZoom(), 7), {animate:true});
@@ -797,6 +799,9 @@ function selectCustomer(c){
   invalidateMapSizeSoon();
 }
 
+/* =========================
+   Inputs + Calculate + Rest
+   ========================= */
 function getInputs(){
   const factor = toNum(document.getElementById("factor").value);
   return {
@@ -812,7 +817,6 @@ function getInputs(){
 function calculate(){
   const out = document.getElementById("results");
   out.innerHTML = "";
-  hideDetail();
 
   if(!selectedCustomer || !isFinite(selectedCustomer.lat) || !isFinite(selectedCustomer.lon)){
     out.innerHTML = `<div class="small">Bitte zuerst einen Kunden auswählen (ggf. einmal „Geocoden“ drücken).</div>`;
@@ -946,13 +950,11 @@ async function drawRouteOSRM(from, to){
   return null;
 }
 
-function kv(k, v){
-  return `<div class="kv"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`;
-}
+/* Detail / Price Popup / Copy / Drag / Helpers (unverändert) */
+function kv(k, v){ return `<div class="kv"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`; }
 
 function showDetail(row, inputs, routeKm){
   const {product, qtyT, freightPerKm, factor, targetVk} = inputs;
-
   const detailBox = document.getElementById("detailBox");
   const title = document.getElementById("detailTitle");
   const grid = document.getElementById("detailGrid");
@@ -981,14 +983,7 @@ function showDetail(row, inputs, routeKm){
     ${kv("Fracht €/km", `${fmt(freightPerKm)} €`)}
     ${kv("Faktor", `${fmt(factor,2)}`)}
   `;
-
   detailBox.style.display = "block";
-}
-
-function hideDetail(){
-  document.getElementById("detailBox").style.display="none";
-  document.getElementById("detailGrid").innerHTML="";
-  document.getElementById("detailTitle").textContent="Details";
 }
 
 function openRightClickPricePopup(firm, latlng){
