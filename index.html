@@ -350,11 +350,11 @@ const CONFIG = {
 /* =========================
    LocalStorage Keys
    ========================= */
-const LS_GEO_CACHE_KEY = "salesMap_geoCache_v9";
-const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v9";
-const LS_PANEL_POS_KEY = "salesMap_panelPos_v9";
-const LS_COLOR_SCHEME_KEY = "salesMap_colorScheme_v4";
-const LS_THEME_KEY = "salesMap_theme_v3";
+const LS_GEO_CACHE_KEY = "salesMap_geoCache_v10";
+const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v10";
+const LS_PANEL_POS_KEY = "salesMap_panelPos_v10";
+const LS_COLOR_SCHEME_KEY = "salesMap_colorScheme_v5";
+const LS_THEME_KEY = "salesMap_theme_v4";
 
 /* =========================
    State
@@ -440,7 +440,7 @@ async function loadCustomers(){
       accepts: {
         lose: isYes(r["lose"]),
         sackware: isYes(r["sackware"]),
-        // bei dir heißt es "sonstige" -> wir werten das als Industrieware
+        // "sonstige" -> als Industrie benutzt
         industrieware: isYes(r["industrieware"]) || isYes(r["industrie"]) || isYes(r["sonstige"])
       },
 
@@ -461,14 +461,16 @@ async function loadFirms(){
 
     // Preise: exakt wie bei dir
     const baseLose = toNum(r["preis"]);
-    const baseSack = toNum(r["sackwarenp"]);     // ✅ sackwarenp
-    // "industriewal" (wie im Screenshot) – plus Fallbacks falls Header minimal anders ist
+    const baseSack = toNum(r["sackwarenp"]); // ✅ sackwarenp
+
+    // industriewal (wie im Screenshot) + Fallbacks
     const baseInd  = toNum(r["industriewal"] ?? r["industrieware"] ?? r["industriewar"] ?? r["industriewa"]);
 
-    // Stand ist in Spalte D ohne Header -> oft key "" oder "__parsed_extra"
+    // Stand in Spalte D ohne Header
     const stand = getStandFromRow(r);
 
-    const sackInfo = str(r["sackware"]).trim(); // z.B. FireFlies (Info, kein Preis)
+    // Info-Spalte (z.B. FireFlies) - kein Preis
+    const sackInfo = str(r["sackware"]).trim();
 
     return {
       id:"F"+idx,
@@ -603,34 +605,8 @@ function firmColorByProduct(product){
   return palettes[scheme]?.[product] || "#8b5cf6";
 }
 
-function calcDeliveredForFirm(f, inputs){
-  if(!selectedCustomer || !isFinite(selectedCustomer.lat) || !isFinite(selectedCustomer.lon)) return null;
-
-  const kmAir = haversineKm(selectedCustomer.lat, selectedCustomer.lon, f.lat, f.lon);
-
-  const override = priceOverrides?.[f.id]?.[inputs.product];
-  const base = isFinite(override) ? override : f.base[inputs.product];
-  if(!isFinite(base) || base <= 0) return null;
-
-  const freightPerT = (kmAir * inputs.freightPerKm / inputs.qtyT) * inputs.factor;
-  const deliveredPerT = base + freightPerT;
-
-  let marginPerT = NaN;
-  if(isFinite(inputs.targetVk)) marginPerT = inputs.targetVk - deliveredPerT;
-
-  return { kmAir, base, freightPerT, deliveredPerT, marginPerT };
-}
-
+// ✅ WICHTIG: FIRMA-FARBE IMMER NUR NACH PRODUKT (Lose/Sackware/Industrie)
 function firmFillColor(f, inputs){
-  if(isFinite(inputs.targetVk)){
-    const calc = calcDeliveredForFirm(f, inputs);
-    if(!calc) return "#94a3b8";
-    const m = calc.marginPerT;
-    if(!isFinite(m)) return "#94a3b8";
-    if(m >= 10) return "#16a34a";
-    if(m >= 0)  return "#f59e0b";
-    return "#dc2626";
-  }
   return firmColorByProduct(inputs.product);
 }
 
@@ -724,10 +700,6 @@ function initUI(){
     saveLS(LS_COLOR_SCHEME_KEY, schemeSel.value);
     renderMarkers();
     if(selectedCustomer) calculate();
-  });
-
-  document.getElementById("targetVk").addEventListener("input", ()=>{
-    renderMarkers();
   });
 
   document.getElementById("closePanel").addEventListener("click", ()=>{
@@ -907,6 +879,7 @@ function calculate(){
   results.sort((a,b)=>a.deliveredPerT - b.deliveredPerT);
   document.getElementById("kpiCount").textContent = String(results.length);
 
+  // Mini KPI: weiterhin nach Marge (nur Zahlen), NICHT Markerfarben
   const counts = {good:0, mid:0, bad:0};
   if(isFinite(targetVk)){
     for(const r of results){
@@ -918,6 +891,8 @@ function calculate(){
     }
   }
   updateMiniKpis(counts);
+
+  // Markerfarben nach Produkt aktualisieren
   renderMarkers();
 
   if(!results.length){
@@ -1221,23 +1196,19 @@ function isYes(v){
 }
 
 function getStandFromRow(r){
-  // 1) falls irgendwann ein Header "stand" existiert
   const direct = str(r["stand"]).trim();
   if(direct) return direct;
 
-  // 2) Spalte ohne Header -> key "" (PapaParse lässt das oft zu)
   if(Object.prototype.hasOwnProperty.call(r, "")){
     const v = str(r[""]).trim();
     if(v) return v;
   }
 
-  // 3) Falls PapaParse es als Extra-Felder ablegt
   if(Array.isArray(r["__parsed_extra"]) && r["__parsed_extra"].length){
     const v = str(r["__parsed_extra"][0]).trim();
     if(v) return v;
   }
 
-  // 4) fallback: suche irgendeinen key der leer aussieht
   for(const k of Object.keys(r)){
     if(String(k).trim()===""){
       const v = str(r[k]).trim();
