@@ -47,14 +47,34 @@
       --popup-bg:#ffffff;
       --popup-text:#0f172a;
       --popup-border:rgba(15,23,42,.12);
+
+      /* ✅ FIX: Höhe der Topbar (anpassen wenn nötig) */
+      --topbar-h: 84px;
     }
 
-    html,body{height:100%;margin:0;background:#ffffff}
-    #map{height:100%;width:100%}
+    /* ✅ FIX: Kein Margin / kein Padding, volle Höhe */
+    html,body{
+      height:100%;
+      margin:0;
+      padding:0;
+      background:#ffffff;
+      overflow:hidden;
+    }
+
+    /* ✅ FIX: Map füllt Bildschirm, beginnt unter Topbar */
+    #map{
+      position:absolute;
+      left:0; right:0;
+      top:var(--topbar-h);
+      bottom:0;
+      width:100%;
+    }
 
     /* Topbar (NOW WHITE) */
     .topbar{
-      position:absolute; top:12px; left:12px; right:12px; z-index:3000;
+      position:fixed;
+      top:12px; left:12px; right:12px;
+      z-index:3000;
       display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;
       padding:10px 12px; border-radius:14px;
       background:var(--ui-bg);
@@ -601,11 +621,11 @@ function customerTriangleIcon(){
   return L.divIcon({ html:`<div class="tri"></div>`, className:"", iconSize:[20,18], iconAnchor:[10,18] });
 }
 
-/* NEW: choose firm color by product (and use lighter palette) */
+/* NEW: choose firm color by product */
 function firmColorByProduct(product){
-  if(product==="lose") return "#8b5cf6";        // orange
-  if(product==="sackware") return "#a855f7";    // violet
-  if(product==="industrieware") return "#6d28d9";// cyan
+  if(product==="lose") return "#8b5cf6";
+  if(product==="sackware") return "#a855f7";
+  if(product==="industrieware") return "#6d28d9";
   return "#f59e0b";
 }
 
@@ -682,6 +702,11 @@ function renderMarkers(){
   });
 }
 
+/* ✅ FIX: Leaflet nach Layout-Änderung einmal neu berechnen */
+function invalidateMapSizeSoon(){
+  setTimeout(()=>{ try{ map.invalidateSize(); }catch(e){} }, 50);
+}
+
 /* =========================
    UI + Autocomplete
    ========================= */
@@ -689,7 +714,6 @@ function initUI(){
   document.getElementById("btnGeo").addEventListener("click", geocodeAll);
   document.getElementById("btnCalc").addEventListener("click", calculate);
 
-  // NEW: when changing product, recolor firm markers immediately
   document.getElementById("product").addEventListener("change", ()=>{
     renderMarkers();
     if(selectedCustomer) calculate();
@@ -697,6 +721,7 @@ function initUI(){
 
   document.getElementById("closePanel").addEventListener("click", ()=>{
     document.getElementById("panel").classList.add("hidden");
+    invalidateMapSizeSoon();
   });
 
   const input = document.getElementById("custSearch");
@@ -708,7 +733,7 @@ function initUI(){
     ac.style.top  = (r.bottom + window.scrollY + 8) + "px";
     ac.style.minWidth = Math.max(320, r.width) + "px";
   }
-  window.addEventListener("resize", positionAC);
+  window.addEventListener("resize", ()=>{ positionAC(); invalidateMapSizeSoon(); });
   window.addEventListener("scroll", positionAC, true);
 
   input.addEventListener("focus", ()=>{ positionAC(); showSuggestions(input.value); });
@@ -797,6 +822,7 @@ function selectCustomer(c){
     map.setView([c.lat,c.lon], Math.max(map.getZoom(), 7), {animate:true});
   }
   document.getElementById("panel").classList.remove("hidden");
+  invalidateMapSizeSoon();
 }
 
 /* =========================
