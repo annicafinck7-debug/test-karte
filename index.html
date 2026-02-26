@@ -10,75 +10,116 @@
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
   <style>
-    html,body{height:100%;margin:0;background:#0b0f14}
+    :root{
+      /* LIGHT UI */
+      --ui-bg:#ffffff;
+      --ui-text:#0f172a;
+      --ui-muted:#475569;
+      --ui-border:rgba(15,23,42,.12);
+      --ui-soft:rgba(15,23,42,.05);
+      --ui-soft2:rgba(15,23,42,.08);
+      --ui-shadow:0 12px 34px rgba(2,6,23,.12);
+
+      /* Inputs */
+      --inp-bg:#ffffff;
+      --inp-text:#0f172a;
+      --inp-border:rgba(15,23,42,.18);
+      --inp-ph:rgba(15,23,42,.45);
+      --inp-focus:rgba(37,99,235,.45);
+
+      /* Buttons */
+      --btn-bg:rgba(15,23,42,.06);
+      --btn-border:rgba(15,23,42,.14);
+      --btn-text:#0f172a;
+
+      --btn-primary:#22c55e;
+      --btn-primary-text:#052e16;
+
+      /* Firms (NEW COLORS) */
+      --firm-stroke:#0f172a;
+      --firm-fill:#f59e0b; /* default orange */
+      --firm-stroke-weight:2;
+
+      /* Customer triangle */
+      --cust-tri:#2563eb;
+
+      /* Leaflet popup */
+      --popup-bg:#ffffff;
+      --popup-text:#0f172a;
+      --popup-border:rgba(15,23,42,.12);
+    }
+
+    html,body{height:100%;margin:0;background:#ffffff}
     #map{height:100%;width:100%}
 
-    /* Topbar */
+    /* Topbar (NOW WHITE) */
     .topbar{
       position:absolute; top:12px; left:12px; right:12px; z-index:3000;
       display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;
       padding:10px 12px; border-radius:14px;
-      background:rgba(15,20,28,.92); backdrop-filter: blur(10px);
-      border:1px solid rgba(255,255,255,.10);
-      box-shadow:0 12px 34px rgba(0,0,0,.35);
+      background:var(--ui-bg);
+      border:1px solid var(--ui-border);
+      box-shadow:var(--ui-shadow);
       font:14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      color:#e9eef6;
+      color:var(--ui-text);
     }
     .brand{font-weight:900; white-space:nowrap; margin-right:4px;}
     .field{display:flex; flex-direction:column; gap:4px}
-    .field label{font-size:11px; opacity:.75; margin-left:2px}
+    .field label{font-size:11px; color:var(--ui-muted); margin-left:2px}
     .field input,.field select{
       height:34px;
       padding:0 10px;
       border-radius:10px;
-      border:1px solid rgba(255,255,255,.14);
-      background:rgba(255,255,255,.06);
-      color:#e9eef6;
+      border:1px solid var(--inp-border);
+      background:var(--inp-bg);
+      color:var(--inp-text);
       outline:none;
       min-width: 120px;
     }
-    .field input::placeholder{color:rgba(233,238,246,.55)}
-    .field input:focus,.field select:focus{border-color:rgba(233,238,246,.35)}
+    .field input::placeholder{color:var(--inp-ph)}
+    .field input:focus,.field select:focus{border-color:var(--inp-focus); box-shadow:0 0 0 3px rgba(37,99,235,.12)}
     .w240{min-width:240px}
     .w140{min-width:140px}
+
     .btn{
       height:34px;
       padding:0 12px;
       border-radius:10px;
-      border:1px solid rgba(255,255,255,.14);
-      background:rgba(255,255,255,.10);
-      color:#e9eef6;
+      border:1px solid var(--btn-border);
+      background:var(--btn-bg);
+      color:var(--btn-text);
       cursor:pointer;
       font-weight:800;
     }
     .btn.primary{
-      background:#22c55e;
-      border-color:#22c55e;
-      color:#04110a;
+      background:var(--btn-primary);
+      border-color:var(--btn-primary);
+      color:var(--btn-primary-text);
     }
     .btn:active{transform:translateY(1px)}
     #loadStatus{
       margin-left:auto;
       align-self:center;
       font-weight:900;
-      opacity:.85;
+      color:var(--ui-text);
+      opacity:.9;
       padding:6px 10px;
       border-radius:999px;
-      border:1px solid rgba(255,255,255,.10);
-      background:rgba(255,255,255,.06);
+      border:1px solid var(--ui-border);
+      background:var(--ui-soft);
       white-space:nowrap;
     }
 
-    /* Autocomplete */
+    /* Autocomplete (NOW WHITE) */
     .ac{
       position:absolute; z-index:4000;
-      background:rgba(15,20,28,.98);
-      border:1px solid rgba(255,255,255,.12);
+      background:var(--ui-bg);
+      border:1px solid var(--ui-border);
       border-radius:12px;
-      box-shadow:0 12px 34px rgba(0,0,0,.45);
+      box-shadow:var(--ui-shadow);
       overflow:hidden;
       font:14px/1.2 system-ui, Arial;
-      color:#e9eef6;
+      color:var(--ui-text);
       max-height:260px;
       overflow:auto;
       min-width: 320px;
@@ -86,57 +127,57 @@
     }
     .ac .item{
       padding:10px 12px;
-      border-bottom:1px solid rgba(255,255,255,.08);
+      border-bottom:1px solid var(--ui-border);
       cursor:pointer;
     }
     .ac .item:last-child{border-bottom:none}
-    .ac .item:hover{background:rgba(255,255,255,.06)}
+    .ac .item:hover{background:var(--ui-soft)}
     .ac .name{font-weight:900}
-    .ac .addr{font-size:12px; opacity:.75; margin-top:2px}
+    .ac .addr{font-size:12px; color:var(--ui-muted); margin-top:2px}
 
-    /* Panel */
+    /* Panel (NOW WHITE) */
     .panel{
       position:absolute; top:88px; right:12px; z-index:2500;
       width:640px; max-height: calc(100vh - 110px);
       display:flex; flex-direction:column;
-      background:rgba(15,20,28,.92); backdrop-filter: blur(10px);
-      border:1px solid rgba(255,255,255,.10);
+      background:var(--ui-bg);
+      border:1px solid var(--ui-border);
       border-radius:16px;
-      box-shadow:0 12px 34px rgba(0,0,0,.35);
+      box-shadow:var(--ui-shadow);
       overflow:hidden;
       font:14px/1.25 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      color:#e9eef6;
+      color:var(--ui-text);
       user-select:none;
     }
     .panel.hidden{display:none;}
     .panel-h{
       display:flex; align-items:center; justify-content:space-between;
       padding:10px 12px;
-      background:rgba(255,255,255,.04);
-      border-bottom:1px solid rgba(255,255,255,.08);
+      background:var(--ui-soft);
+      border-bottom:1px solid var(--ui-border);
       cursor:move;
     }
     .panel-h .t{font-weight:900}
     .panel-h .x{
-      width:30px;height:30px;border-radius:10px;border:0;
-      background:rgba(255,255,255,.10); color:#e9eef6;
+      width:30px;height:30px;border-radius:10px;border:1px solid var(--ui-border);
+      background:var(--ui-soft2); color:var(--ui-text);
       cursor:pointer; font-weight:900;
     }
     .panel-b{padding:10px 12px; overflow:auto; user-select:text;}
     .kpis{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:10px;}
     .kpi{
-      border:1px solid rgba(255,255,255,.10);
-      background:rgba(255,255,255,.05);
+      border:1px solid var(--ui-border);
+      background:var(--ui-soft);
       border-radius:14px; padding:10px;
     }
-    .kpi .h{font-size:12px; opacity:.8}
+    .kpi .h{font-size:12px; color:var(--ui-muted)}
     .kpi .v{font-weight:900; font-size:16px; margin-top:2px}
-    .small{font-size:12px; opacity:.78}
+    .small{font-size:12px; color:var(--ui-muted)}
 
-    /* Detail box */
+    /* Detail box (NOW WHITE) */
     .detail{
-      border:1px solid rgba(255,255,255,.10);
-      background:rgba(255,255,255,.05);
+      border:1px solid var(--ui-border);
+      background:var(--ui-soft);
       border-radius:14px; padding:10px;
       margin:10px 0 12px 0;
     }
@@ -148,63 +189,76 @@
       font-size:13px;
     }
     .kv{display:flex; justify-content:space-between; gap:10px}
-    .k{opacity:.78}
+    .k{color:var(--ui-muted)}
     .v{font-weight:900}
 
     /* Table */
     table{width:100%; border-collapse:collapse; font-size:13px;}
-    th,td{padding:10px 6px; border-bottom:1px solid rgba(255,255,255,.08); vertical-align:top; text-align:left;}
-    th{font-size:12px; opacity:.8; font-weight:900; position:sticky; top:0; background:rgba(15,20,28,.98)}
+    th,td{padding:10px 6px; border-bottom:1px solid var(--ui-border); vertical-align:top; text-align:left;}
+    th{
+      font-size:12px; color:var(--ui-muted); font-weight:900;
+      position:sticky; top:0; background:var(--ui-bg);
+    }
     tr{cursor:pointer}
-    tr:hover{background:rgba(255,255,255,.04)}
+    tr:hover{background:var(--ui-soft)}
     .badge{
       display:inline-block; padding:3px 10px; border-radius:999px;
       font-size:12px; font-weight:900;
-      border:1px solid rgba(255,255,255,.14);
-      background:rgba(255,255,255,.06);
+      border:1px solid var(--ui-border);
+      background:var(--ui-soft);
       white-space:nowrap;
+      color:var(--ui-text);
     }
-    .good{background:rgba(0,255,140,.12); border-color:rgba(0,255,140,.30)}
-    .mid{background:rgba(255,200,0,.12); border-color:rgba(255,200,0,.30)}
-    .bad{background:rgba(255,80,80,.12); border-color:rgba(255,80,80,.30)}
+    .good{background:rgba(0,180,90,.10); border-color:rgba(0,180,90,.25); color:#065f46}
+    .mid{background:rgba(245,158,11,.12); border-color:rgba(245,158,11,.25); color:#92400e}
+    .bad{background:rgba(239,68,68,.10); border-color:rgba(239,68,68,.25); color:#991b1b}
 
-    /* Leaflet popup dark */
+    /* Leaflet popup (NOW WHITE) */
     .leaflet-popup-content-wrapper, .leaflet-popup-tip{
-      background:#0f1520; color:#e9eef6;
-      border:1px solid rgba(255,255,255,.10);
+      background:var(--popup-bg);
+      color:var(--popup-text);
+      border:1px solid var(--popup-border);
+      box-shadow:0 12px 34px rgba(2,6,23,.12);
     }
     .rcard{font:14px/1.25 system-ui, Arial; padding:8px; min-width:280px;}
     .rcard .h{font-weight:900;margin-bottom:6px}
     .rcard .r{display:flex; gap:8px; align-items:center; margin-top:6px}
     .rcard input{
       flex:1; padding:9px 10px; border-radius:12px;
-      border:1px solid rgba(255,255,255,.16);
-      background:rgba(255,255,255,.06);
-      color:#e9eef6; outline:none;
+      border:1px solid var(--inp-border);
+      background:var(--inp-bg);
+      color:var(--inp-text); outline:none;
     }
-    .rcard .note{font-size:12px; opacity:.75; margin-top:6px}
+    .rcard .note{font-size:12px; color:var(--ui-muted); margin-top:6px}
 
     /* customer triangle */
     .tri{
       width:0;height:0;
       border-left:10px solid transparent;
       border-right:10px solid transparent;
-      border-bottom:18px solid #6d7cff;
-      filter: drop-shadow(0 3px 6px rgba(0,0,0,.55));
+      border-bottom:18px solid var(--cust-tri);
+      filter: drop-shadow(0 3px 6px rgba(2,6,23,.25));
     }
 
     /* Lieferungen Liste im Popup */
     .deliv{
       margin-top:8px;
-      border-top:1px solid rgba(255,255,255,.10);
+      border-top:1px solid var(--ui-border);
       padding-top:8px;
       font-size:13px;
     }
     .deliv .t{font-weight:900; margin-bottom:6px}
-    .deliv .row{display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-bottom:1px solid rgba(255,255,255,.08)}
+    .deliv .row{display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-bottom:1px solid var(--ui-border)}
     .deliv .row:last-child{border-bottom:none}
     .deliv .f{font-weight:800}
     .deliv .n{font-weight:900; opacity:.95}
+
+    /* Improve Leaflet control contrast a bit on white */
+    .leaflet-control-zoom a{
+      color:#0f172a !important;
+      background:#ffffff !important;
+      border:1px solid rgba(15,23,42,.15) !important;
+    }
   </style>
 </head>
 
@@ -342,10 +396,11 @@ init();
 
 async function init(){
   map = L.map('map', { worldCopyJump:true }).setView([51.2, 10.4], 6);
- L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19,
-  attribution: '&copy; OpenStreetMap contributors'
-}).addTo(map);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
 
   initPanelDrag();
   initUI();
@@ -546,6 +601,14 @@ function customerTriangleIcon(){
   return L.divIcon({ html:`<div class="tri"></div>`, className:"", iconSize:[20,18], iconAnchor:[10,18] });
 }
 
+/* NEW: choose firm color by product (and use lighter palette) */
+function firmColorByProduct(product){
+  if(product==="lose") return "#f97316";        // orange
+  if(product==="sackware") return "#8b5cf6";    // violet
+  if(product==="industrieware") return "#06b6d4";// cyan
+  return "#f59e0b";
+}
+
 function buildDeliveriesHtml(customerName){
   const k = normName(customerName);
   const arr = deliveriesByCustomer.get(k) || [];
@@ -578,10 +641,8 @@ function renderMarkers(){
     if(!isFinite(c.lat)||!isFinite(c.lon)) return;
     const m = L.marker([c.lat,c.lon], {icon: customerTriangleIcon()}).addTo(map);
 
-    // Tooltip bleibt kurz
     m.bindTooltip(`<b>${esc(c.name)}</b><br>${esc(c.address)}`, {direction:"top"});
 
-    // Klick: Kunde wählen + Popup mit Lieferungen anzeigen
     m.on("click", ()=>{
       selectCustomer(c);
 
@@ -601,11 +662,20 @@ function renderMarkers(){
     customerMarkers.push(m);
   });
 
+  const product = document.getElementById("product")?.value || "lose";
+  const fill = firmColorByProduct(product);
+
   firms.forEach(f=>{
     if(!isFinite(f.lat)||!isFinite(f.lon)) return;
+
     const m = L.circleMarker([f.lat,f.lon], {
-      radius:6, color:"#e9eef6", weight:2, fillOpacity:.75
+      radius:7,
+      color: "rgba(15,23,42,.85)",
+      weight: 2,
+      fillColor: fill,
+      fillOpacity:.85
     }).addTo(map);
+
     m.bindTooltip(`<b>${esc(f.name)}</b><br>${esc(f.address)}`, {direction:"top"});
     m.on("contextmenu", (e)=>openRightClickPricePopup(f, e.latlng));
     firmMarkers.push(m);
@@ -618,6 +688,12 @@ function renderMarkers(){
 function initUI(){
   document.getElementById("btnGeo").addEventListener("click", geocodeAll);
   document.getElementById("btnCalc").addEventListener("click", calculate);
+
+  // NEW: when changing product, recolor firm markers immediately
+  document.getElementById("product").addEventListener("change", ()=>{
+    renderMarkers();
+    if(selectedCustomer) calculate();
+  });
 
   document.getElementById("closePanel").addEventListener("click", ()=>{
     document.getElementById("panel").classList.add("hidden");
@@ -647,7 +723,6 @@ function initUI(){
         selectCustomer(found);
         ac.style.display="none";
 
-        // Optional: Popup auch bei Enter anzeigen (wenn Koords da sind)
         if(isFinite(found.lat) && isFinite(found.lon)){
           const html = `
             <div class="rcard">
