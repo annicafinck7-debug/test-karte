@@ -513,23 +513,63 @@ async function init(){
 }
 
 /* =========================
-   Basemap switch
+   Basemap switch (mit Fallback)
    ========================= */
 let baseLayer = null;
+
 function addBaseMap(){
   if(baseLayer){
     try{ map.removeLayer(baseLayer); }catch(e){}
+    baseLayer = null;
   }
+
   const isDark = document.body.classList.contains("dark");
-  const url = isDark
+
+  // Primär: Carto
+  const cartoUrl = isDark
     ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
     : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
 
-  baseLayer = L.tileLayer(url, {
+  // Fallback: OSM (fast immer erreichbar)
+  const osmUrl = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+
+  // erst Carto probieren
+  baseLayer = L.tileLayer(cartoUrl, {
     attribution: "&copy; OpenStreetMap & Carto",
     subdomains: "abcd",
     maxZoom: 19
   }).addTo(map);
+
+  // wenn Carto geblockt / down → automatisch auf OSM wechseln
+  let switched = false;
+  baseLayer.on("tileerror", ()=>{
+    if(switched) return;
+    switched = true;
+
+    try{ map.removeLayer(baseLayer); }catch(e){}
+    baseLayer = L.tileLayer(osmUrl, {
+      attribution: "&copy; OpenStreetMap contributors",
+      maxZoom: 19
+    }).addTo(map);
+
+    setLoadStatus("⚠️ Basemap: Carto blockiert → Fallback OSM aktiv");
+  });
+
+  // wenn nach kurzer Zeit immer noch nix geladen ist → auch fallback
+  setTimeout(()=>{
+    if(switched) return;
+    // wenn noch keine Tiles im DOM sind, ist meistens blockiert
+    const anyTile = document.querySelector(".leaflet-tile-loaded");
+    if(!anyTile){
+      switched = true;
+      try{ map.removeLayer(baseLayer); }catch(e){}
+      baseLayer = L.tileLayer(osmUrl, {
+        attribution: "&copy; OpenStreetMap contributors",
+        maxZoom: 19
+      }).addTo(map);
+      setLoadStatus("⚠️ Basemap: kein Tile-Load → Fallback OSM aktiv");
+    }
+  }, 1500);
 }
 
 /* =========================
