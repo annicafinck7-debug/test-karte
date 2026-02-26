@@ -35,11 +35,6 @@
       --btn-primary:#22c55e;
       --btn-primary-text:#052e16;
 
-      /* Firms */
-      --firm-stroke:#0f172a;
-      --firm-fill:#f59e0b;
-      --firm-stroke-weight:2;
-
       /* Customer triangle */
       --cust-tri:#4c1d95;
 
@@ -57,24 +52,24 @@
       height:100%;
     }
 
-    /* ✅ TOPBAR HOCH: Schlitz weg */
+    /* Topbar bündig oben (kein Schlitz) */
     .topbar{
       position:fixed;
-      top:0; left:0; right:0;          /* ✅ war: 12px */
+      top:0; left:0; right:0;
       z-index:3000;
 
       display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;
-
       padding:10px 12px;
-      border-radius:0 0 14px 14px;     /* ✅ oben gerade, unten rund */
+
+      border-radius:0 0 14px 14px;
       background:var(--ui-bg);
       border:1px solid var(--ui-border);
-      border-top:none;                  /* ✅ kein Rand oben (sauber bündig) */
+      border-top:none;
       box-shadow:var(--ui-shadow);
+
       font:14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
       color:var(--ui-text);
     }
-
     .brand{font-weight:900; white-space:nowrap; margin-right:4px;}
     .field{display:flex; flex-direction:column; gap:4px}
     .field label{font-size:11px; color:var(--ui-muted); margin-left:2px}
@@ -186,7 +181,6 @@
     .kpi .v{font-weight:900; font-size:16px; margin-top:2px}
     .small{font-size:12px; color:var(--ui-muted)}
 
-    /* Detail box */
     .detail{
       border:1px solid var(--ui-border);
       background:var(--ui-soft);
@@ -289,6 +283,16 @@
     </select>
   </div>
 
+  <!-- ✅ NEU: Farbschema -->
+  <div class="field w140">
+    <label>Farbschema</label>
+    <select id="colorScheme">
+      <option value="standard">Standard</option>
+      <option value="pink">Pink</option>
+      <option value="pastel">Pastell</option>
+    </select>
+  </div>
+
   <div class="field w140">
     <label>Radius (km)</label>
     <input id="radiusKm" type="number" min="0" value="250">
@@ -376,6 +380,9 @@ const CONFIG = {
 const LS_GEO_CACHE_KEY = "salesMap_geoCache_v6";
 const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v6";
 const LS_PANEL_POS_KEY = "salesMap_panelPos_v6";
+
+/* ✅ NEU: Farbschema merken */
+const LS_COLOR_SCHEME_KEY = "salesMap_colorScheme_v1";
 
 let geoCache = loadLS(LS_GEO_CACHE_KEY, {});
 let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
@@ -479,6 +486,7 @@ async function loadDeliveries(){
       const kunde = str(r["kunde"] ?? r["kundenname"] ?? r["customer"]).trim();
       const firma = str(r["firma"] ?? r["firm"] ?? r["lieferant"]).trim();
       const anzahl = toNum(r["anzahl"] ?? r["count"] ?? r["lieferungen"]);
+
       if(!kunde || !firma) continue;
 
       const k = normName(kunde);
@@ -597,12 +605,31 @@ function customerTriangleIcon(){
   return L.divIcon({ html:`<div class="tri"></div>`, className:"", iconSize:[20,18], iconAnchor:[10,18] });
 }
 
+/* ✅ NEU: Farbe nach Produkt + ausgewähltem Farbschema */
 function firmColorByProduct(product){
-  if(product==="lose") return "#ec4899";         // Pink (Lose)
-  if(product==="sackware") return "#f472b6";     // Rosa (Sackware)
-  if(product==="industrieware") return "#fb7185";// Rose/Coral (Industrieware)
-  return "#ec4899";
+  const scheme = document.getElementById("colorScheme")?.value || "standard";
+
+  const palettes = {
+    standard: {
+      lose: "#8b5cf6",
+      sackware: "#a855f7",
+      industrieware: "#6d28d9"
+    },
+    pink: {
+      lose: "#ec4899",
+      sackware: "#f472b6",
+      industrieware: "#fb7185"
+    },
+    pastel: {
+      lose: "#f9a8d4",
+      sackware: "#fbcfe8",
+      industrieware: "#fda4af"
+    }
+  };
+
+  return palettes[scheme]?.[product] || "#ec4899";
 }
+
 function buildDeliveriesHtml(customerName){
   const k = normName(customerName);
   const arr = deliveriesByCustomer.get(k) || [];
@@ -676,7 +703,7 @@ function renderMarkers(){
   });
 }
 
-/* ✅ FIX: Leaflet nach Layout-Änderung einmal neu berechnen */
+/* Leaflet nach Layout-Änderung */
 function invalidateMapSizeSoon(){
   setTimeout(()=>{ try{ map.invalidateSize(); }catch(e){} }, 50);
 }
@@ -691,6 +718,16 @@ function initUI(){
   document.getElementById("product").addEventListener("change", ()=>{
     renderMarkers();
     if(selectedCustomer) calculate();
+  });
+
+  /* ✅ NEU: Farbschema wechseln */
+  const schemeSel = document.getElementById("colorScheme");
+  const savedScheme = loadLS(LS_COLOR_SCHEME_KEY, "standard");
+  schemeSel.value = savedScheme || "standard";
+
+  schemeSel.addEventListener("change", ()=>{
+    saveLS(LS_COLOR_SCHEME_KEY, schemeSel.value);
+    renderMarkers();
   });
 
   document.getElementById("closePanel").addEventListener("click", ()=>{
@@ -790,6 +827,7 @@ function initUI(){
 function selectCustomer(c){
   selectedCustomer = c;
   updateCustomerKpi(c);
+  hideDetail();
 
   if(isFinite(c.lat)&&isFinite(c.lon)){
     map.setView([c.lat,c.lon], Math.max(map.getZoom(), 7), {animate:true});
@@ -799,7 +837,7 @@ function selectCustomer(c){
 }
 
 /* =========================
-   Inputs + Calculate + Rest
+   Inputs
    ========================= */
 function getInputs(){
   const factor = toNum(document.getElementById("factor").value);
@@ -813,9 +851,13 @@ function getInputs(){
   };
 }
 
+/* =========================
+   Calculate (uses Luftlinie for km)
+   ========================= */
 function calculate(){
   const out = document.getElementById("results");
   out.innerHTML = "";
+  hideDetail();
 
   if(!selectedCustomer || !isFinite(selectedCustomer.lat) || !isFinite(selectedCustomer.lon)){
     out.innerHTML = `<div class="small">Bitte zuerst einen Kunden auswählen (ggf. einmal „Geocoden“ drücken).</div>`;
@@ -915,6 +957,9 @@ function makeBadge(row, targetVk){
   return `<span class="badge bad">${fmt(m)} €/t</span>`;
 }
 
+/* =========================
+   Routing OSRM
+   ========================= */
 async function drawRouteOSRM(from, to){
   if(routeLayer){
     try{ map.removeLayer(routeLayer); }catch(e){}
@@ -949,11 +994,16 @@ async function drawRouteOSRM(from, to){
   return null;
 }
 
-/* Detail / Price Popup / Copy / Drag / Helpers (unverändert) */
-function kv(k, v){ return `<div class="kv"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`; }
+/* =========================
+   Detail Box
+   ========================= */
+function kv(k, v){
+  return `<div class="kv"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`;
+}
 
 function showDetail(row, inputs, routeKm){
   const {product, qtyT, freightPerKm, factor, targetVk} = inputs;
+
   const detailBox = document.getElementById("detailBox");
   const title = document.getElementById("detailTitle");
   const grid = document.getElementById("detailGrid");
@@ -982,9 +1032,19 @@ function showDetail(row, inputs, routeKm){
     ${kv("Fracht €/km", `${fmt(freightPerKm)} €`)}
     ${kv("Faktor", `${fmt(factor,2)}`)}
   `;
+
   detailBox.style.display = "block";
 }
 
+function hideDetail(){
+  document.getElementById("detailBox").style.display="none";
+  document.getElementById("detailGrid").innerHTML="";
+  document.getElementById("detailTitle").textContent="Details";
+}
+
+/* =========================
+   Right click price edit (per product)
+   ========================= */
 function openRightClickPricePopup(firm, latlng){
   const product = document.getElementById("product").value;
   const currentOverride = priceOverrides?.[firm.id]?.[product];
@@ -1026,6 +1086,9 @@ function openRightClickPricePopup(firm, latlng){
   }, 30);
 }
 
+/* =========================
+   Copy offer text
+   ========================= */
 async function copyOfferText(customer, row, inputs, routeKm){
   const {product, qtyT, freightPerKm, factor, targetVk} = inputs;
   const marginPerT = isFinite(targetVk) ? (targetVk - row.deliveredPerT) : NaN;
@@ -1066,6 +1129,9 @@ Fracht €/km: ${freightPerKm} | Faktor: ${factor}`;
   }
 }
 
+/* =========================
+   Panel drag + persist
+   ========================= */
 function initPanelDrag(){
   const panel = document.getElementById("panel");
   const header = document.getElementById("panelHeader");
@@ -1103,6 +1169,9 @@ function initPanelDrag(){
   });
 }
 
+/* =========================
+   KPI updates
+   ========================= */
 function updateCustomerKpi(c){
   if(!c){
     document.getElementById("kpiCustomer").textContent = "—";
@@ -1117,11 +1186,9 @@ function updateCustomerKpi(c){
   document.getElementById("kpiRoute").textContent = "—";
 }
 
-function setLoadStatus(text){
-  const el = document.getElementById("loadStatus");
-  if(el) el.textContent = text;
-}
-
+/* =========================
+   Helpers
+   ========================= */
 function toNum(v){
   if(v===null || v===undefined) return NaN;
   if(typeof v==="number") return v;
