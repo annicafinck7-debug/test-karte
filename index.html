@@ -217,17 +217,36 @@
       border:1px solid var(--ui-border) !important;
     }
 
-    @media (max-width: 720px){
-      .panel{width: calc(100vw - 24px); right:12px;}
-      .kpis{grid-template-columns:1fr;}
-      .detail-grid{grid-template-columns:1fr;}
-      .w240{min-width: 200px;}
+    /* ✅ NEU: kleine Legende */
+    .legend{
+      position:absolute;
+      right:12px;
+      bottom:12px;
+      z-index:2600;
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px solid var(--ui-border);
+      background:var(--ui-bg);
+      box-shadow:var(--ui-shadow);
+      font:13px/1.2 system-ui, Arial;
+      color:var(--ui-text);
+      user-select:none;
+      min-width:180px;
     }
+    .legend .t{font-weight:900;margin-bottom:8px}
+    .legend .r{display:flex;align-items:center;gap:8px;margin:6px 0}
+    .sw{width:12px;height:12px;border-radius:4px;border:1px solid rgba(0,0,0,.18)}
   </style>
 </head>
 
 <body>
 <div id="map"></div>
+<div class="legend" id="legend">
+  <div class="t">Produkt-Farben</div>
+  <div class="r"><span class="sw" id="swLose"></span> Lose</div>
+  <div class="r"><span class="sw" id="swSack"></span> Sackware</div>
+  <div class="r"><span class="sw" id="swInd"></span> Industrieware</div>
+</div>
 
 <div class="topbar" id="topbar">
   <div class="brand">Verkaufs-Karte</div>
@@ -350,11 +369,11 @@ const CONFIG = {
 /* =========================
    LocalStorage Keys
    ========================= */
-const LS_GEO_CACHE_KEY = "salesMap_geoCache_v10";
-const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v10";
-const LS_PANEL_POS_KEY = "salesMap_panelPos_v10";
-const LS_COLOR_SCHEME_KEY = "salesMap_colorScheme_v5";
-const LS_THEME_KEY = "salesMap_theme_v4";
+const LS_GEO_CACHE_KEY = "salesMap_geoCache_v11";
+const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v11";
+const LS_PANEL_POS_KEY = "salesMap_panelPos_v11";
+const LS_COLOR_SCHEME_KEY = "salesMap_colorScheme_v6";
+const LS_THEME_KEY = "salesMap_theme_v5";
 
 /* =========================
    State
@@ -379,7 +398,6 @@ async function init(){
 
   map = L.map('map', { worldCopyJump:true }).setView([51.2, 10.4], 6);
 
-  // ✅ NUR OSM (damit es nicht grau bleibt)
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
     attribution: "&copy; OpenStreetMap contributors"
@@ -402,6 +420,7 @@ async function init(){
   updateCustomerKpi(null);
   updateLoadStatusCounts();
   updateMiniKpis({good:0, mid:0, bad:0});
+  updateLegend();
 }
 
 /* =========================
@@ -421,7 +440,7 @@ function parseCsv(url){
 }
 
 /* =========================
-   Kunden (mit Annahme)
+   Kunden (Annahme)
    ========================= */
 async function loadCustomers(){
   const rows = await parseCsv(CONFIG.customersCsvUrl);
@@ -435,22 +454,18 @@ async function loadCustomers(){
       address: ort,
       lat: NaN,
       lon: NaN,
-
-      // ✅ Annahme aus Sheet (ja/nein)
       accepts: {
         lose: isYes(r["lose"]),
         sackware: isYes(r["sackware"]),
-        // "sonstige" -> als Industrie benutzt
         industrieware: isYes(r["industrieware"]) || isYes(r["industrie"]) || isYes(r["sonstige"])
       },
-
       raw: r
     };
   }).filter(x=>x.address);
 }
 
 /* =========================
-   Firmen (deine Spalten!)
+   Firmen (deine Spalten)
    ========================= */
 async function loadFirms(){
   const rows = await parseCsv(CONFIG.firmsCsvUrl);
@@ -459,17 +474,11 @@ async function loadFirms(){
     const name = str(r["firma"] ?? r["name"]).trim();
     const ort  = str(r["ort"] ?? r["adresse"] ?? r["address"]).trim();
 
-    // Preise: exakt wie bei dir
     const baseLose = toNum(r["preis"]);
-    const baseSack = toNum(r["sackwarenp"]); // ✅ sackwarenp
-
-    // industriewal (wie im Screenshot) + Fallbacks
+    const baseSack = toNum(r["sackwarenp"]);
     const baseInd  = toNum(r["industriewal"] ?? r["industrieware"] ?? r["industriewar"] ?? r["industriewa"]);
 
-    // Stand in Spalte D ohne Header
     const stand = getStandFromRow(r);
-
-    // Info-Spalte (z.B. FireFlies) - kein Preis
     const sackInfo = str(r["sackware"]).trim();
 
     return {
@@ -487,14 +496,13 @@ async function loadFirms(){
 }
 
 /* =========================
-   Deliveries (nur Status ✓/—)
+   Deliveries (nur Status)
    ========================= */
 async function loadDeliveries(){
   try{
     await parseCsv(CONFIG.deliveriesCsvUrl);
     deliveriesLoaded = true;
   }catch(e){
-    console.warn("Deliveries load error:", e);
     deliveriesLoaded = false;
   }
 }
@@ -536,9 +544,7 @@ async function geocodeAddress(address){
         return {lat, lon};
       }
     }
-  }catch(e){
-    console.warn("Geocode error", e);
-  }
+  }catch(e){}
   return null;
 }
 
@@ -547,7 +553,6 @@ function updateLoadStatusCounts(prefix=""){
   const totalF = firms.length;
   const doneC = customers.filter(c=>isFinite(c.lat)&&isFinite(c.lon)).length;
   const doneF = firms.filter(f=>isFinite(f.lat)&&isFinite(f.lon)).length;
-
   const delivTxt = deliveriesLoaded ? ` · Aufträge ✓` : ` · Aufträge —`;
   setLoadStatus(`${prefix}${prefix? " · ":""}Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}${delivTxt}`);
 }
@@ -597,17 +602,38 @@ function customerTriangleIcon(){
 
 function firmColorByProduct(product){
   const scheme = document.getElementById("colorScheme")?.value || "standard";
+
+  // ✅ JETZT RICHTIG DEUTLICH: Blau / Orange / Grün
   const palettes = {
-    standard: { lose: "#8b5cf6", sackware: "#a855f7", industrieware: "#6d28d9" },
-    pink:     { lose: "#ec4899", sackware: "#f472b6", industrieware: "#fb7185" },
-    pastel:   { lose: "#f9a8d4", sackware: "#fbcfe8", industrieware: "#fda4af" }
+    standard: {
+      lose: "#2563eb",         // Blau
+      sackware: "#f59e0b",     // Orange
+      industrieware: "#16a34a" // Grün
+    },
+    pink: {
+      lose: "#db2777",
+      sackware: "#f472b6",
+      industrieware: "#fb7185"
+    },
+    pastel: {
+      lose: "#93c5fd",
+      sackware: "#fdba74",
+      industrieware: "#86efac"
+    }
   };
-  return palettes[scheme]?.[product] || "#8b5cf6";
+
+  return palettes[scheme]?.[product] || "#2563eb";
 }
 
-// ✅ WICHTIG: FIRMA-FARBE IMMER NUR NACH PRODUKT (Lose/Sackware/Industrie)
 function firmFillColor(f, inputs){
   return firmColorByProduct(inputs.product);
+}
+
+function updateLegend(){
+  const scheme = document.getElementById("colorScheme")?.value || "standard";
+  document.getElementById("swLose").style.background = firmColorByProduct("lose");
+  document.getElementById("swSack").style.background = firmColorByProduct("sackware");
+  document.getElementById("swInd").style.background  = firmColorByProduct("industrieware");
 }
 
 function renderMarkers(){
@@ -649,7 +675,6 @@ function renderMarkers(){
     if(!isFinite(f.lat)||!isFinite(f.lon)) return;
 
     const fill = firmFillColor(f, inputs);
-
     const standTxt = f.stand ? ` (${f.stand})` : "";
     const sackInfoTxt = f.sackInfo ? ` · Info: ${f.sackInfo}` : "";
 
@@ -658,7 +683,7 @@ function renderMarkers(){
       color: outline,
       weight: 2,
       fillColor: fill,
-      fillOpacity:.88
+      fillOpacity:.9
     }).addTo(map);
 
     m.bindTooltip(
@@ -667,11 +692,13 @@ function renderMarkers(){
     );
 
     m.on("mouseover", ()=>m.setStyle({radius:9, weight:3, fillOpacity:1}));
-    m.on("mouseout", ()=>m.setStyle({radius:7, weight:2, fillOpacity:.88}));
+    m.on("mouseout", ()=>m.setStyle({radius:7, weight:2, fillOpacity:.9}));
 
     m.on("contextmenu", (e)=>openRightClickPricePopup(f, e.latlng));
     firmMarkers.push(m);
   });
+
+  updateLegend();
 }
 
 /* =========================
@@ -840,7 +867,6 @@ function calculate(){
   const inputs = getInputs();
   const {product, radiusKm, qtyT, freightPerKm, factor, targetVk} = inputs;
 
-  // ✅ Kunde nimmt Produkt nicht an -> stoppen
   if(selectedCustomer.accepts && selectedCustomer.accepts[product] === false){
     out.innerHTML = `<div class="small">
       ⚠️ <b>${esc(selectedCustomer.name)}</b> nimmt <b>${esc(productLabel(product))}</b> laut Kunden-Tabelle nicht an.
@@ -879,7 +905,6 @@ function calculate(){
   results.sort((a,b)=>a.deliveredPerT - b.deliveredPerT);
   document.getElementById("kpiCount").textContent = String(results.length);
 
-  // Mini KPI: weiterhin nach Marge (nur Zahlen), NICHT Markerfarben
   const counts = {good:0, mid:0, bad:0};
   if(isFinite(targetVk)){
     for(const r of results){
@@ -892,7 +917,6 @@ function calculate(){
   }
   updateMiniKpis(counts);
 
-  // Markerfarben nach Produkt aktualisieren
   renderMarkers();
 
   if(!results.length){
@@ -986,9 +1010,7 @@ async function drawRouteOSRM(from, to){
       document.getElementById("kpiRoute").textContent = km ? `${fmt(km,1)} km` : "OK";
       return km;
     }
-  }catch(e){
-    console.warn("Routing error", e);
-  }
+  }catch(e){}
 
   routeLayer = L.polyline([[from.lat,from.lon],[to.lat,to.lon]], {weight:4}).addTo(map);
   map.fitBounds(routeLayer.getBounds().pad(0.25), {animate:true});
