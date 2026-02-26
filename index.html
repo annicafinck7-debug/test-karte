@@ -47,12 +47,8 @@
       --popup-bg:#ffffff;
       --popup-text:#0f172a;
       --popup-border:rgba(15,23,42,.12);
-
-      /* ✅ FIX: Höhe der Topbar (anpassen wenn nötig) */
-      --topbar-h: 84px;
     }
 
-    /* ✅ FIX: Kein Margin / kein Padding, volle Höhe */
     html,body{
       height:100%;
       margin:0;
@@ -61,39 +57,49 @@
       overflow:hidden;
     }
 
-    /* ✅ FIX: Map füllt Bildschirm, beginnt unter Topbar */
-   #map{
-  position:absolute;
-  inset:0;        /* top:0; right:0; bottom:0; left:0; */
-  width:100%;
-  height:100%;
-}
+    /* Karte volle Höhe */
+    #map{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+    }
 
-    /* Topbar (NOW WHITE) */
+    /* Topbar (FLACH) */
     .topbar{
       position:fixed;
       top:12px; left:12px; right:12px;
       z-index:3000;
-      display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;
-      padding:10px 12px; border-radius:14px;
+
+      display:flex;
+      gap:10px;
+      align-items:center;     /* ✅ statt flex-end */
+      flex-wrap:nowrap;       /* ✅ kein Umbruch */
+      overflow-x:auto;        /* ✅ scroll statt zweite Zeile */
+
+      padding:8px 12px;       /* ✅ flacher */
+      border-radius:14px;
       background:var(--ui-bg);
       border:1px solid var(--ui-border);
       box-shadow:var(--ui-shadow);
       font:14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
       color:var(--ui-text);
     }
+
     .brand{font-weight:900; white-space:nowrap; margin-right:4px;}
-    .field{display:flex; flex-direction:column; gap:4px}
-    .field label{font-size:11px; color:var(--ui-muted); margin-left:2px}
+
+    .field{display:flex; flex-direction:column; gap:0}
+    .field label{display:none;} /* ✅ spart Höhe */
+
     .field input,.field select{
-      height:34px;
+      height:32px;            /* ✅ flacher */
       padding:0 10px;
       border-radius:10px;
       border:1px solid var(--inp-border);
       background:var(--inp-bg);
       color:var(--inp-text);
       outline:none;
-      min-width: 120px;
+      min-width:120px;
     }
     .field input::placeholder{color:var(--inp-ph)}
     .field input:focus,.field select:focus{border-color:var(--inp-focus); box-shadow:0 0 0 3px rgba(37,99,235,.12)}
@@ -101,7 +107,7 @@
     .w140{min-width:140px}
 
     .btn{
-      height:34px;
+      height:32px;            /* ✅ flacher */
       padding:0 12px;
       border-radius:10px;
       border:1px solid var(--btn-border);
@@ -109,6 +115,7 @@
       color:var(--btn-text);
       cursor:pointer;
       font-weight:800;
+      flex:0 0 auto;
     }
     .btn.primary{
       background:var(--btn-primary);
@@ -116,6 +123,7 @@
       color:var(--btn-primary-text);
     }
     .btn:active{transform:translateY(1px)}
+
     #loadStatus{
       margin-left:auto;
       align-self:center;
@@ -127,9 +135,10 @@
       border:1px solid var(--ui-border);
       background:var(--ui-soft);
       white-space:nowrap;
+      flex:0 0 auto;
     }
 
-    /* Autocomplete (NOW WHITE) */
+    /* Autocomplete */
     .ac{
       position:absolute; z-index:4000;
       background:var(--ui-bg);
@@ -154,7 +163,7 @@
     .ac .name{font-weight:900}
     .ac .addr{font-size:12px; color:var(--ui-muted); margin-top:2px}
 
-    /* Panel (NOW WHITE) */
+    /* Panel */
     .panel{
       position:absolute; top:88px; right:12px; z-index:2500;
       width:640px; max-height: calc(100vh - 110px);
@@ -193,7 +202,7 @@
     .kpi .v{font-weight:900; font-size:16px; margin-top:2px}
     .small{font-size:12px; color:var(--ui-muted)}
 
-    /* Detail box (NOW WHITE) */
+    /* Detail box */
     .detail{
       border:1px solid var(--ui-border);
       background:var(--ui-soft);
@@ -232,7 +241,7 @@
     .mid{background:rgba(245,158,11,.12); border-color:rgba(245,158,11,.25); color:#92400e}
     .bad{background:rgba(239,68,68,.10); border-color:rgba(239,68,68,.25); color:#991b1b}
 
-    /* Leaflet popup (NOW WHITE) */
+    /* Leaflet popup */
     .leaflet-popup-content-wrapper, .leaflet-popup-tip{
       background:var(--popup-bg);
       color:var(--popup-text);
@@ -378,16 +387,10 @@
 const CONFIG = {
   firmsCsvUrl: "https://docs.google.com/spreadsheets/d/1f1oD1TlYWPRbD12d05yIGkqmXVygVt3ZHLk9U0bKoTs/gviz/tq?tqx=out:csv&gid=0",
   customersCsvUrl: "https://docs.google.com/spreadsheets/d/1DaiLyZbhJkdSQ1PHbJQmguIrDnGrrhiAVgJC4PJO8vA/gviz/tq?tqx=out:csv&gid=0",
-
-  /* NEU: Lieferungen (Kunde / firma / anzahl) */
   deliveriesCsvUrl: "https://docs.google.com/spreadsheets/d/1fcvlM2BUDpoV-HDyPtgDf_1ZqWql6MdEMbisR0eqYYw/gviz/tq?tqx=out:csv&gid=0",
-
   geocodeDelayMs: 1100
 };
 
-/* =========================
-   LocalStorage Keys
-   ========================= */
 const LS_GEO_CACHE_KEY = "salesMap_geoCache_v6";
 const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v6";
 const LS_PANEL_POS_KEY = "salesMap_panelPos_v6";
@@ -395,22 +398,15 @@ const LS_PANEL_POS_KEY = "salesMap_panelPos_v6";
 let geoCache = loadLS(LS_GEO_CACHE_KEY, {});
 let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
 
-/* =========================
-   State
-   ========================= */
 let map, customers=[], firms=[];
 let customerMarkers=[], firmMarkers=[];
 let selectedCustomer=null;
 let routeLayer=null;
 let lastRouteKm=null;
 
-/* NEU: Lieferungen */
-let deliveriesByCustomer = new Map(); // key: normCustomerName -> [{firma, anzahl}]
+let deliveriesByCustomer = new Map();
 let deliveriesLoaded = false;
 
-/* =========================
-   Init
-   ========================= */
 init();
 
 async function init(){
@@ -432,9 +428,6 @@ async function init(){
   updateLoadStatusCounts();
 }
 
-/* =========================
-   CSV with header normalize
-   ========================= */
 function parseCsv(url){
   return new Promise((resolve, reject)=>{
     Papa.parse(url, {
@@ -486,9 +479,6 @@ async function loadFirms(){
   }).filter(x=>x.name && x.address);
 }
 
-/* =========================
-   NEU: Lieferungen laden (Kunde / firma / anzahl)
-   ========================= */
 async function loadDeliveries(){
   try{
     const rows = await parseCsv(CONFIG.deliveriesCsvUrl);
@@ -507,7 +497,6 @@ async function loadDeliveries(){
       mapTmp.set(k, arr);
     }
 
-    // sortiere pro Kunde nach Anzahl (absteigend)
     for(const [k, arr] of mapTmp.entries()){
       arr.sort((a,b)=>(b.anzahl||0)-(a.anzahl||0));
     }
@@ -521,13 +510,8 @@ async function loadDeliveries(){
   }
 }
 
-/* =========================
-   Geocoding + Cache
-   ========================= */
 function normAddr(a){ return str(a).trim().replace(/\s+/g,' '); }
-function normName(s){
-  return str(s).trim().toLowerCase().replace(/\s+/g,' ');
-}
+function normName(s){ return str(s).trim().toLowerCase().replace(/\s+/g,' '); }
 
 function applyCacheCoordsOnly(){
   customers.forEach(c=>{
@@ -613,14 +597,10 @@ async function geocodeAll(){
   setLoadStatus(`✅ Fertig: Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}`);
 }
 
-/* =========================
-   Markers
-   ========================= */
 function customerTriangleIcon(){
   return L.divIcon({ html:`<div class="tri"></div>`, className:"", iconSize:[20,18], iconAnchor:[10,18] });
 }
 
-/* NEW: choose firm color by product */
 function firmColorByProduct(product){
   if(product==="lose") return "#8b5cf6";
   if(product==="sackware") return "#a855f7";
@@ -701,14 +681,10 @@ function renderMarkers(){
   });
 }
 
-/* ✅ FIX: Leaflet nach Layout-Änderung einmal neu berechnen */
 function invalidateMapSizeSoon(){
   setTimeout(()=>{ try{ map.invalidateSize(); }catch(e){} }, 50);
 }
 
-/* =========================
-   UI + Autocomplete
-   ========================= */
 function initUI(){
   document.getElementById("btnGeo").addEventListener("click", geocodeAll);
   document.getElementById("btnCalc").addEventListener("click", calculate);
@@ -809,9 +785,6 @@ function initUI(){
   }
 }
 
-/* =========================
-   Customer selection
-   ========================= */
 function selectCustomer(c){
   selectedCustomer = c;
   updateCustomerKpi(c);
@@ -824,9 +797,6 @@ function selectCustomer(c){
   invalidateMapSizeSoon();
 }
 
-/* =========================
-   Inputs
-   ========================= */
 function getInputs(){
   const factor = toNum(document.getElementById("factor").value);
   return {
@@ -839,9 +809,6 @@ function getInputs(){
   };
 }
 
-/* =========================
-   Calculate (uses Luftlinie for km)
-   ========================= */
 function calculate(){
   const out = document.getElementById("results");
   out.innerHTML = "";
@@ -945,9 +912,6 @@ function makeBadge(row, targetVk){
   return `<span class="badge bad">${fmt(m)} €/t</span>`;
 }
 
-/* =========================
-   Routing OSRM
-   ========================= */
 async function drawRouteOSRM(from, to){
   if(routeLayer){
     try{ map.removeLayer(routeLayer); }catch(e){}
@@ -982,9 +946,6 @@ async function drawRouteOSRM(from, to){
   return null;
 }
 
-/* =========================
-   Detail Box
-   ========================= */
 function kv(k, v){
   return `<div class="kv"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`;
 }
@@ -1030,9 +991,6 @@ function hideDetail(){
   document.getElementById("detailTitle").textContent="Details";
 }
 
-/* =========================
-   Right click price edit (per product)
-   ========================= */
 function openRightClickPricePopup(firm, latlng){
   const product = document.getElementById("product").value;
   const currentOverride = priceOverrides?.[firm.id]?.[product];
@@ -1074,9 +1032,6 @@ function openRightClickPricePopup(firm, latlng){
   }, 30);
 }
 
-/* =========================
-   Copy offer text
-   ========================= */
 async function copyOfferText(customer, row, inputs, routeKm){
   const {product, qtyT, freightPerKm, factor, targetVk} = inputs;
   const marginPerT = isFinite(targetVk) ? (targetVk - row.deliveredPerT) : NaN;
@@ -1117,9 +1072,6 @@ Fracht €/km: ${freightPerKm} | Faktor: ${factor}`;
   }
 }
 
-/* =========================
-   Panel drag + persist
-   ========================= */
 function initPanelDrag(){
   const panel = document.getElementById("panel");
   const header = document.getElementById("panelHeader");
@@ -1157,9 +1109,6 @@ function initPanelDrag(){
   });
 }
 
-/* =========================
-   KPI updates
-   ========================= */
 function updateCustomerKpi(c){
   if(!c){
     document.getElementById("kpiCustomer").textContent = "—";
@@ -1174,9 +1123,6 @@ function updateCustomerKpi(c){
   document.getElementById("kpiRoute").textContent = "—";
 }
 
-/* =========================
-   Helpers
-   ========================= */
 function setLoadStatus(text){
   const el = document.getElementById("loadStatus");
   if(el) el.textContent = text;
