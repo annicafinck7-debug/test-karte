@@ -1,707 +1,33 @@
-<!DOCTYPE html>
-<html lang="de">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>Verkaufs-Karte – Kunden & Firmen</title>
-
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-
-  <style>
-    :root{
-      --ui-bg:#ffffff; --ui-text:#0f172a; --ui-muted:#475569;
-      --ui-border:rgba(15,23,42,.12); --ui-soft:rgba(15,23,42,.05);
-      --ui-soft2:rgba(15,23,42,.08); --ui-shadow:0 12px 34px rgba(2,6,23,.12);
-
-      --inp-bg:#ffffff; --inp-text:#0f172a; --inp-border:rgba(15,23,42,.18);
-      --inp-ph:rgba(15,23,42,.45); --inp-focus:rgba(37,99,235,.45);
-
-      --btn-bg:rgba(15,23,42,.06); --btn-border:rgba(15,23,42,.14); --btn-text:#0f172a;
-      --btn-primary:#22c55e; --btn-primary-text:#052e16;
-
-      --cust-tri:#4c1d95;
-
-      --popup-bg:#ffffff; --popup-text:#0f172a; --popup-border:rgba(15,23,42,.12);
-
-      --pill-bg:rgba(15,23,42,.05); --pill-border:rgba(15,23,42,.12);
-
-      --good:#16a34a; --mid:#f59e0b; --bad:#dc2626;
-    }
-
-    body.dark{
-      --ui-bg:#0b1220; --ui-text:#e5e7eb; --ui-muted:#a3adc2;
-      --ui-border:rgba(148,163,184,.18); --ui-soft:rgba(148,163,184,.10);
-      --ui-soft2:rgba(148,163,184,.14); --ui-shadow:0 12px 34px rgba(0,0,0,.35);
-
-      --inp-bg:#0f172a; --inp-text:#e5e7eb; --inp-border:rgba(148,163,184,.22);
-      --inp-ph:rgba(229,231,235,.55); --inp-focus:rgba(59,130,246,.55);
-
-      --btn-bg:rgba(148,163,184,.10); --btn-border:rgba(148,163,184,.22); --btn-text:#e5e7eb;
-
-      --popup-bg:#0f172a; --popup-text:#e5e7eb; --popup-border:rgba(148,163,184,.22);
-
-      --pill-bg:rgba(148,163,184,.10); --pill-border:rgba(148,163,184,.22);
-    }
-
-    html,body{height:100%;margin:0;background:var(--ui-bg)}
-    #map{position:absolute; inset:0; width:100%; height:100%; background:#d1d5db;}
-
-    .topbar{
-      position:fixed; top:0; left:0; right:0; z-index:3000;
-      display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;
-      padding:10px 12px;
-      border-radius:0 0 14px 14px;
-      background:var(--ui-bg);
-      border:1px solid var(--ui-border);
-      border-top:none;
-      box-shadow:var(--ui-shadow);
-      font:14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      color:var(--ui-text);
-      backdrop-filter: blur(6px);
-    }
-    .brand{font-weight:900; white-space:nowrap; margin-right:4px;}
-    .field{display:flex; flex-direction:column; gap:4px}
-    .field label{font-size:11px; color:var(--ui-muted); margin-left:2px}
-    .field input,.field select{
-      height:34px; padding:0 10px; border-radius:10px;
-      border:1px solid var(--inp-border);
-      background:var(--inp-bg);
-      color:var(--inp-text);
-      outline:none;
-      min-width: 120px;
-    }
-    .field input::placeholder{color:var(--inp-ph)}
-    .field input:focus,.field select:focus{border-color:var(--inp-focus); box-shadow:0 0 0 3px rgba(37,99,235,.12)}
-    .w240{min-width:240px}
-    .w140{min-width:140px}
-    .w110{min-width:110px}
-
-    .btn{
-      height:34px; padding:0 12px; border-radius:10px;
-      border:1px solid var(--btn-border);
-      background:var(--btn-bg);
-      color:var(--btn-text);
-      cursor:pointer;
-      font-weight:800;
-    }
-    .btn.primary{ background:var(--btn-primary); border-color:var(--btn-primary); color:var(--btn-primary-text); }
-    .btn:active{transform:translateY(1px)}
-
-    .pill{
-      align-self:center;
-      padding:6px 10px;
-      border-radius:999px;
-      border:1px solid var(--pill-border);
-      background:var(--pill-bg);
-      white-space:nowrap;
-      font-weight:900;
-      color:var(--ui-text);
-      display:flex;
-      gap:8px;
-      align-items:center;
-    }
-    #loadStatus{ margin-left:auto; }
-
-    .dot{width:8px;height:8px;border-radius:50%;background:rgba(148,163,184,.8);display:inline-block;}
-    .dot.good{background:var(--good)}
-    .dot.mid{background:var(--mid)}
-    .dot.bad{background:var(--bad)}
-
-    .ac{
-      position:absolute; z-index:4000;
-      background:var(--ui-bg);
-      border:1px solid var(--ui-border);
-      border-radius:12px;
-      box-shadow:var(--ui-shadow);
-      overflow:hidden;
-      font:14px/1.2 system-ui, Arial;
-      color:var(--ui-text);
-      max-height:260px;
-      overflow:auto;
-      min-width: 320px;
-      display:none;
-    }
-    .ac .item{padding:10px 12px;border-bottom:1px solid var(--ui-border);cursor:pointer;}
-    .ac .item:last-child{border-bottom:none}
-    .ac .item:hover{background:var(--ui-soft)}
-    .ac .name{font-weight:900}
-    .ac .addr{font-size:12px;color:var(--ui-muted);margin-top:2px}
-
-    .panel{
-      position:absolute; top:88px; right:12px; z-index:2500;
-      width:640px; max-height: calc(100vh - 110px);
-      display:flex; flex-direction:column;
-      background:var(--ui-bg);
-      border:1px solid var(--ui-border);
-      border-radius:16px;
-      box-shadow:var(--ui-shadow);
-      overflow:hidden;
-      font:14px/1.25 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      color:var(--ui-text);
-      user-select:none;
-    }
-    .panel.hidden{display:none;}
-    .panel-h{
-      display:flex;align-items:center;justify-content:space-between;
-      padding:10px 12px;background:var(--ui-soft);
-      border-bottom:1px solid var(--ui-border);
-      cursor:move;
-    }
-    .panel-h .t{font-weight:900}
-    .panel-h .x{
-      width:30px;height:30px;border-radius:10px;border:1px solid var(--ui-border);
-      background:var(--ui-soft2); color:var(--ui-text);
-      cursor:pointer; font-weight:900;
-    }
-    .panel-b{padding:10px 12px; overflow:auto; user-select:text;}
-
-    .kpis{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;}
-    .kpi{border:1px solid var(--ui-border);background:var(--ui-soft);border-radius:14px;padding:10px;}
-    .kpi .h{font-size:12px;color:var(--ui-muted)}
-    .kpi .v{font-weight:900;font-size:16px;margin-top:2px}
-    .small{font-size:12px;color:var(--ui-muted)}
-
-    .detail{
-      border:1px solid var(--ui-border);
-      background:var(--ui-soft);
-      border-radius:14px; padding:10px;
-      margin:10px 0 12px 0;
-    }
-    .detail .title{font-weight:900; margin-bottom:6px}
-    .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;font-size:13px;}
-    .kv{display:flex;justify-content:space-between;gap:10px}
-    .k{color:var(--ui-muted)}
-    .v{font-weight:900}
-
-    table{width:100%; border-collapse:collapse; font-size:13px;}
-    th,td{padding:10px 6px; border-bottom:1px solid var(--ui-border); vertical-align:top; text-align:left;}
-    th{font-size:12px;color:var(--ui-muted);font-weight:900;position:sticky;top:0;background:var(--ui-bg);}
-    tr{cursor:pointer}
-    tr:hover{background:var(--ui-soft)}
-    .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:900;border:1px solid var(--ui-border);background:var(--ui-soft);white-space:nowrap;color:var(--ui-text);}
-    .good{background:rgba(22,163,74,.14); border-color:rgba(22,163,74,.35); color:var(--good)}
-    .mid{background:rgba(245,158,11,.16); border-color:rgba(245,158,11,.35); color:var(--mid)}
-    .bad{background:rgba(220,38,38,.14); border-color:rgba(220,38,38,.35); color:var(--bad)}
-
-    .leaflet-popup-content-wrapper, .leaflet-popup-tip{
-      background:var(--popup-bg);
-      color:var(--popup-text);
-      border:1px solid var(--popup-border);
-      box-shadow:0 12px 34px rgba(2,6,23,.12);
-    }
-
-    .rcard{font:14px/1.25 system-ui, Arial; padding:8px; min-width:280px;}
-    .rcard .h{font-weight:900;margin-bottom:6px}
-    .rcard .r{display:flex; gap:8px; align-items:center; margin-top:6px}
-    .rcard input{
-      flex:1; padding:9px 10px; border-radius:12px;
-      border:1px solid var(--inp-border);
-      background:var(--inp-bg);
-      color:var(--inp-text); outline:none;
-    }
-    .rcard .note{font-size:12px; color:var(--ui-muted); margin-top:6px}
-
-    .tri{
-      width:0;height:0;
-      border-left:10px solid transparent;
-      border-right:10px solid transparent;
-      border-bottom:18px solid var(--cust-tri);
-      filter: drop-shadow(0 3px 6px rgba(2,6,23,.25));
-    }
-
-    .leaflet-control-zoom a{
-      color:var(--ui-text) !important;
-      background:var(--ui-bg) !important;
-      border:1px solid var(--ui-border) !important;
-    }
-  </style>
-</head>
-
-<body>
-<div id="map"></div>
-
-<div class="topbar" id="topbar">
-  <div class="brand">Verkaufs-Karte</div>
-
-  <div class="field w240">
-    <label>Kunde suchen</label>
-    <input id="custSearch" placeholder="Name / Ort …">
-  </div>
-
-  <div class="field w140">
-    <label>Produkt</label>
-    <select id="product">
-      <option value="lose">Lose</option>
-      <option value="sackware">Sackware</option>
-      <option value="industrieware">Industrieware</option>
-    </select>
-  </div>
-
-  <div class="field w140">
-    <label>Farbschema</label>
-    <select id="colorScheme">
-      <option value="standard">Standard</option>
-      <option value="pink">Pink</option>
-      <option value="pastel">Pastell</option>
-    </select>
-  </div>
-
-  <div class="field w110">
-    <label>UI</label>
-    <button class="btn" id="btnTheme" title="Hell/Dunkel umschalten">🌙</button>
-  </div>
-
-  <div class="field w140">
-    <label>Radius (km)</label>
-    <input id="radiusKm" type="number" min="0" value="250">
-  </div>
-
-  <div class="field w140">
-    <label>Menge (t)</label>
-    <input id="qtyT" type="number" min="0.1" step="0.1" value="24">
-  </div>
-
-  <div class="field w140">
-    <label>Fracht €/km</label>
-    <input id="freightPerKm" type="number" step="0.01" value="1.85">
-  </div>
-
-  <div class="field w140">
-    <label>Faktor</label>
-    <input id="factor" type="number" step="0.01" value="1.05" min="0" max="10">
-  </div>
-
-  <div class="field w140">
-    <label>Ziel-VK €/t</label>
-    <input id="targetVk" type="number" step="0.01" placeholder="optional">
-  </div>
-
-  <button class="btn primary" id="btnCalc">Berechnen</button>
-  <button class="btn" id="btnGeo">Geocoden</button>
-
-  <div class="pill" id="loadStatus"><span class="dot"></span> —</div>
-
-  <div class="pill" id="miniKpi" title="Schnellübersicht (nur wenn Ziel-VK gesetzt)">
-    <span class="dot good"></span><span id="miniGood">0</span>
-    <span class="dot mid"></span><span id="miniMid">0</span>
-    <span class="dot bad"></span><span id="miniBad">0</span>
-  </div>
-</div>
-
-<div id="ac" class="ac"></div>
-
-<div id="panel" class="panel">
-  <div id="panelHeader" class="panel-h">
-    <div class="t">Ergebnisse</div>
-    <button id="closePanel" class="x" title="Schließen">✕</button>
-  </div>
-  <div class="panel-b">
-    <div class="kpis">
-      <div class="kpi">
-        <div class="h">Kunde</div>
-        <div class="v" id="kpiCustomer">—</div>
-        <div class="small" id="kpiCustomerAddr">—</div>
-      </div>
-      <div class="kpi">
-        <div class="h">Treffer</div>
-        <div class="v" id="kpiCount">—</div>
-        <div class="small" id="kpiQty">Menge: —</div>
-      </div>
-      <div class="kpi">
-        <div class="h">Routing</div>
-        <div class="v" id="kpiRoute">—</div>
-        <div class="small">Klick auf Zeile lädt Route</div>
-      </div>
-    </div>
-
-    <div class="detail" id="ordersBox" style="display:none">
-      <div class="title" id="ordersTitle">Aufträge</div>
-      <div id="ordersList" class="small"></div>
-    </div>
-
-    <div class="detail" id="detailBox" style="display:none">
-      <div class="title" id="detailTitle">Details</div>
-      <div class="detail-grid" id="detailGrid"></div>
-    </div>
-
-    <div class="small" style="margin:6px 0 10px 0">
-      Klick auf Zeile: Route + Details + kopiert Angebotstext. Rechtsklick auf Firma: Preis ändern (Enter). Klick auf Karte: Route ausblenden.
-    </div>
-
-    <div id="results"></div>
-  </div>
-</div>
-<script>
 /* =========================
-   SHEETS
-   ========================= */
-const CONFIG = {
-  firmsCsvUrl: "https://docs.google.com/spreadsheets/d/1f1oD1TlYWPRbD12d05yIGkqmXVygVt3ZHLk9U0bKoTs/gviz/tq?tqx=out:csv&gid=0",
-  customersCsvUrl: "https://docs.google.com/spreadsheets/d/1DaiLyZbhJkdSQ1PHbJQmguIrDnGrrhiAVgJC4PJO8vA/gviz/tq?tqx=out:csv&gid=0",
-  deliveriesCsvUrl: "https://docs.google.com/spreadsheets/d/1fcvlM2BUDpoV-HDyPtgDf_1ZqWql6MdEMbisR0eqYYw/gviz/tq?tqx=out:csv&gid=0",
-  geocodeDelayMs: 1100
-};
-
-/* =========================
-   LocalStorage Keys
-   ========================= */
-const LS_GEO_CACHE_KEY = "salesMap_geoCache_v11";
-const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v11";
-const LS_PANEL_POS_KEY = "salesMap_panelPos_v11";
-const LS_COLOR_SCHEME_KEY = "salesMap_colorScheme_v6";
-const LS_THEME_KEY = "salesMap_theme_v5";
-
-/* =========================
-   State
-   ========================= */
-let map, customers=[], firms=[];
-let customerMarkers=[], firmMarkers=[];
-let selectedCustomer=null;
-let routeLayer=null;
-
-/* ✅ AUFTRÄGE */
-let deliveriesLoaded = false;
-let deliveriesAgg = [];
-let deliveriesByCustomer = new Map();
-
-let geoCache = loadLS(LS_GEO_CACHE_KEY, {});
-let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
-
-/* =========================
-   Init
-   ========================= */
-init();
-
-async function init(){
-  applyThemeFromLS();
-
-  map = L.map('map', { worldCopyJump:true }).setView([51.2, 10.4], 6);
-
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: "&copy; OpenStreetMap contributors"
-  }).addTo(map);
-
-  setTimeout(()=>map.invalidateSize(), 80);
-
-  initPanelDrag();
-  initUI();
-
-  map.on("click", ()=>{
-    clearRoute();
-    hideDetail();
-  });
-
-  setLoadStatus("Lade Tabellen …");
-  await Promise.all([loadCustomers(), loadFirms(), loadDeliveries()]);
-  applyCacheCoordsOnly();
-  renderMarkers();
-  updateCustomerKpi(null);
-  updateLoadStatusCounts();
-  updateMiniKpis({good:0, mid:0, bad:0});
-}
-
-/* =========================
-   CSV (robust: fallback auf ;)
-   ========================= */
-function parseCsv(url){
-  return new Promise((resolve, reject)=>{
-    Papa.parse(url, {
-      download:true,
-      header:true,
-      skipEmptyLines:true,
-      delimiter: "", // auto
-      transformHeader: (h) => String(h||"").trim().toLowerCase(),
-      complete: (res)=>{
-        const first = res?.data?.[0];
-        const keys = first ? Object.keys(first) : [];
-        if(first && keys.length <= 1){
-          Papa.parse(url, {
-            download:true,
-            header:true,
-            skipEmptyLines:true,
-            delimiter: ";",
-            transformHeader: (h) => String(h||"").trim().toLowerCase(),
-            complete: (res2)=>resolve(res2.data),
-            error: reject
-          });
-          return;
-        }
-        resolve(res.data);
-      },
-      error: reject
-    });
-  });
-}
-
-/* =========================
-   Kunden
-   ========================= */
-async function loadCustomers(){
-  const rows = await parseCsv(CONFIG.customersCsvUrl);
-  customers = rows.map((r, idx)=>{
-    const name = str(r["name"] ?? r["kundenname"] ?? r["kunde"] ?? r["firma"] ?? r["unternehmen"]).trim();
-    const ort  = str(r["ort"] ?? r["adresse"] ?? r["address"]).trim();
-
-    return {
-      id:"C"+idx,
-      name: name || ort || "Kunde",
-      address: ort,
-      lat: NaN,
-      lon: NaN,
-      accepts: {
-        lose: isYes(r["lose"]),
-        sackware: isYes(r["sackware"]),
-        industrieware: isYes(r["industrieware"]) || isYes(r["industrie"]) || isYes(r["sonstige"])
-      },
-      raw: r
-    };
-  }).filter(x=>x.address);
-}
-
-/* =========================
-   Firmen
-   ========================= */
-async function loadFirms(){
-  const rows = await parseCsv(CONFIG.firmsCsvUrl);
-
-  firms = rows.map((r, idx)=>{
-    const name = str(r["firma"] ?? r["name"]).trim();
-    const ort  = str(r["ort"] ?? r["adresse"] ?? r["address"]).trim();
-
-    const baseLose = toNum(r["preis"]);
-    const baseSack = toNum(r["sackwarenp"]);
-    const baseInd  = toNum(r["industriewal"] ?? r["industrieware"] ?? r["industriewar"] ?? r["industriewa"]);
-
-    const stand = getStandFromRow(r);
-    const sackInfo = str(r["sackware"]).trim();
-
-    return {
-      id:"F"+idx,
-      name: name || "Firma",
-      address: ort,
-      base:{ lose: baseLose, sackware: baseSack, industrieware: baseInd },
-      stand,
-      sackInfo,
-      lat: NaN,
-      lon: NaN,
-      raw: r
-    };
-  }).filter(x=>x.name && x.address);
-}
-
-/* =========================
-   ✅ AUFTRÄGE LADEN
-   Spalten: kunde | firma | anzahl
-   ========================= */
-async function loadDeliveries(){
-  try{
-    const rows = await parseCsv(CONFIG.deliveriesCsvUrl);
-
-    deliveriesAgg = rows.map(r=>{
-      const kunde = str(r["kunde"]).trim();
-      const firma = str(r["firma"]).trim();
-      const anzahl = toInt(r["anzahl"]);
-      return { kunde, firma, anzahl };
-    }).filter(x => x.kunde && x.firma);
-
-    deliveriesByCustomer = new Map();
-    for(const d of deliveriesAgg){
-      const k = normText(d.kunde);
-      if(!deliveriesByCustomer.has(k)) deliveriesByCustomer.set(k, []);
-      deliveriesByCustomer.get(k).push({ firma: d.firma, anzahl: d.anzahl });
-    }
-
-    for(const [k,list] of deliveriesByCustomer.entries()){
-      list.sort((a,b)=> (b.anzahl||0) - (a.anzahl||0));
-      deliveriesByCustomer.set(k, list);
-    }
-
-    deliveriesLoaded = true;
-  }catch(e){
-    deliveriesLoaded = false;
-    deliveriesAgg = [];
-    deliveriesByCustomer = new Map();
-  }
-}
-
-/* =========================
-   Geocoding + Cache
-   ========================= */
-function normAddr(a){ return str(a).trim().replace(/\s+/g,' '); }
-
-function applyCacheCoordsOnly(){
-  customers.forEach(c=>{
-    const hit = geoCache[normAddr(c.address)];
-    if(hit){ c.lat=hit.lat; c.lon=hit.lon; }
-  });
-  firms.forEach(f=>{
-    const hit = geoCache[normAddr(f.address)];
-    if(hit){ f.lat=hit.lat; f.lon=hit.lon; }
-  });
-}
-
-async function geocodeAddress(address){
-  const key = normAddr(address);
-  if(!key) return null;
-
-  if(geoCache[key] && isFinite(geoCache[key].lat) && isFinite(geoCache[key].lon)){
-    return {lat: geoCache[key].lat, lon: geoCache[key].lon};
-  }
-
-  const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(key);
-  try{
-    const res = await fetch(url, { headers: { "Accept":"application/json" } });
-    const data = await res.json();
-    if(data && data[0]){
-      const lat = parseFloat(data[0].lat);
-      const lon = parseFloat(data[0].lon);
-      if(isFinite(lat) && isFinite(lon)){
-        geoCache[key] = {lat, lon, ts: Date.now()};
-        saveLS(LS_GEO_CACHE_KEY, geoCache);
-        return {lat, lon};
-      }
-    }
-  }catch(e){}
-  return null;
-}
-
-function updateLoadStatusCounts(prefix=""){
-  const totalC = customers.length;
-  const totalF = firms.length;
-  const doneC = customers.filter(c=>isFinite(c.lat)&&isFinite(c.lon)).length;
-  const doneF = firms.filter(f=>isFinite(f.lat)&&isFinite(f.lon)).length;
-  const delivTxt = deliveriesLoaded ? ` · Aufträge ✓` : ` · Aufträge —`;
-  setLoadStatus(`${prefix}${prefix? " · ":""}Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}${delivTxt}`);
-}
-
-async function geocodeAll(){
-  const totalC = customers.length;
-  const totalF = firms.length;
-
-  let doneC = customers.filter(c=>isFinite(c.lat)&&isFinite(c.lon)).length;
-  let doneF = firms.filter(f=>isFinite(f.lat)&&isFinite(f.lon)).length;
-
-  setLoadStatus(`Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}`);
-
-  for(const c of customers){
-    if(isFinite(c.lat) && isFinite(c.lon)) continue;
-    const coords = await geocodeAddress(c.address);
-    if(coords){
-      c.lat = coords.lat; c.lon = coords.lon;
-      doneC++;
-      setLoadStatus(`Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}`);
-    }
-    await sleep(CONFIG.geocodeDelayMs);
-  }
-
-  for(const f of firms){
-    if(isFinite(f.lat) && isFinite(f.lon)) continue;
-    const coords = await geocodeAddress(f.address);
-    if(coords){
-      f.lat = coords.lat; f.lon = coords.lon;
-      doneF++;
-      setLoadStatus(`Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}`);
-    }
-    await sleep(CONFIG.geocodeDelayMs);
-  }
-
-  renderMarkers();
-  if(selectedCustomer) updateCustomerKpi(selectedCustomer);
-  setLoadStatus(`✅ Fertig: Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}`);
-}
-
-/* =========================
-   Markers
-   ========================= */
-function customerTriangleIcon(){
-  return L.divIcon({ html:`<div class="tri"></div>`, className:"", iconSize:[20,18], iconAnchor:[10,18] });
-}
-
-function firmColorByProduct(product){
-  const scheme = document.getElementById("colorScheme")?.value || "standard";
-  const palettes = {
-    standard: { lose:"#2563eb", sackware:"#f59e0b", industrieware:"#16a34a" },
-    pink:     { lose:"#e11d48", sackware:"#ec4899", industrieware:"#f9a8d4" },
-    pastel:   { lose:"#93c5fd", sackware:"#fdba74", industrieware:"#86efac" }
-  };
-  return palettes[scheme]?.[product] || "#2563eb";
-}
-
-function firmFillColor(f, inputs){
-  return firmColorByProduct(inputs.product);
-}
-
-function renderMarkers(){
-  customerMarkers.forEach(m=>m.remove());
-  firmMarkers.forEach(m=>m.remove());
-  customerMarkers=[]; firmMarkers=[];
-
-  customers.forEach(c=>{
-    if(!isFinite(c.lat)||!isFinite(c.lon)) return;
-    const m = L.marker([c.lat,c.lon], {icon: customerTriangleIcon()}).addTo(map);
-
-    const accTxt =
-      `Lose: ${c.accepts?.lose ? "✓" : "—"} · Sackware: ${c.accepts?.sackware ? "✓" : "—"} · Industrie: ${c.accepts?.industrieware ? "✓" : "—"}`;
-
-    m.bindTooltip(`<b>${esc(c.name)}</b><br>${esc(c.address)}<br><span class="small">${esc(accTxt)}</span>`, {direction:"top"});
-
-    m.on("click", ()=>{
-      selectCustomer(c);
-      const html = `
-        <div class="rcard">
-          <div class="h">${esc(c.name)}</div>
-          <div class="small">${esc(c.address)}</div>
-          <div class="small" style="margin-top:6px;">Annahme: ${esc(accTxt)}</div>
-        </div>
-      `;
-      L.popup({closeButton:true, autoClose:true, closeOnClick:true})
-        .setLatLng([c.lat, c.lon])
-        .setContent(html)
-        .openOn(map);
-    });
-
-    customerMarkers.push(m);
-  });
-
-  const inputs = getInputs();
-  const outline = document.body.classList.contains("dark") ? "rgba(229,231,235,.9)" : "rgba(15,23,42,.9)";
-
-  firms.forEach(f=>{
-    if(!isFinite(f.lat)||!isFinite(f.lon)) return;
-
-    const fill = firmFillColor(f, inputs);
-    const standTxt = f.stand ? ` (${f.stand})` : "";
-    const sackInfoTxt = f.sackInfo ? ` · Info: ${f.sackInfo}` : "";
-
-    const m = L.circleMarker([f.lat,f.lon], {
-      radius:7,
-      color: outline,
-      weight: 2,
-      fillColor: fill,
-      fillOpacity:.9
-    }).addTo(map);
-
-    m.bindTooltip(
-      `<b>${esc(f.name)}</b><br>${esc(f.address)}<br><span class="small">Stand${esc(standTxt)}${esc(sackInfoTxt)}</span>`,
-      {direction:"top"}
-    );
-
-    m.on("mouseover", ()=>m.setStyle({radius:9, weight:3, fillOpacity:1}));
-    m.on("mouseout", ()=>m.setStyle({radius:7, weight:2, fillOpacity:.9}));
-
-    m.on("contextmenu", (e)=>openRightClickPricePopup(f, e.latlng));
-    firmMarkers.push(m);
-  });
-}
-  /* =========================
    UI + Autocomplete
    ========================= */
 function initUI(){
   document.getElementById("btnGeo").addEventListener("click", geocodeAll);
   document.getElementById("btnCalc").addEventListener("click", calculate);
+
+  // ✅ PLZ/Ort springen
+  document.getElementById("btnPlace").addEventListener("click", async ()=>{
+    const q = document.getElementById("placeSearch").value.trim();
+    if(!q) return;
+    setLoadStatus("Suche Ort/PLZ …");
+    const coords = await geocodePlace(q);
+    if(coords){
+      map.setView([coords.lat, coords.lon], 10, {animate:true});
+      setLoadStatus("✅ Ort gefunden");
+    }else{
+      setLoadStatus("⚠️ Nicht gefunden");
+    }
+    updateLoadStatusCounts();
+  });
+  document.getElementById("placeSearch").addEventListener("keydown", (e)=>{
+    if(e.key==="Enter") document.getElementById("btnPlace").click();
+  });
+
+  // ✅ Zonen toggle
+  document.getElementById("btnZones").addEventListener("click", ()=>{
+    toggleZones();
+    document.getElementById("btnZones").textContent = drawEnabled ? "✅ Aktiv" : "✏️ Zeichnen";
+  });
 
   document.getElementById("btnTheme").addEventListener("click", ()=>{
     document.body.classList.toggle("dark");
@@ -1076,9 +402,13 @@ function showDetail(row, inputs, routeKm){
   const marginPerT = isFinite(targetVk) ? (targetVk - row.deliveredPerT) : NaN;
   const profitTotal = isFinite(marginPerT) ? (marginPerT * qtyT) : NaN;
 
+  const zoneName = (isFinite(row.f.lat) && isFinite(row.f.lon)) ? getZoneNameForLatLng(row.f.lat, row.f.lon) : "";
+  const note = (notesStore?.[row.f.id] || "").trim();
+
   grid.innerHTML = `
     ${kv("Adresse", row.f.address)}
     ${kv("Stand", row.f.stand ? row.f.stand : "—")}
+    ${kv("Zone", zoneName || "—")}
     ${kv("Produkt", productLabel(product))}
     ${kv("Menge", `${fmt(qtyT,1)} t`)}
     ${kv("Route (km)", routeText)}
@@ -1092,6 +422,7 @@ function showDetail(row, inputs, routeKm){
     ${kv("Gewinn gesamt", isFinite(profitTotal) ? `${fmt(profitTotal)} €` : "—")}
     ${kv("Fracht €/km", `${fmt(freightPerKm)} €`)}
     ${kv("Faktor", `${fmt(factor,2)}`)}
+    ${kv("Notiz", note ? note : "—")}
   `;
   detailBox.style.display = "block";
 }
@@ -1102,50 +433,6 @@ function hideDetail(){
 }
 
 /* =========================
-   Right click price edit
-   ========================= */
-function openRightClickPricePopup(firm, latlng){
-  const product = document.getElementById("product").value;
-  const currentOverride = priceOverrides?.[firm.id]?.[product];
-  const current = isFinite(currentOverride) ? currentOverride : firm.base[product];
-
-  const div = document.createElement("div");
-  div.className="rcard";
-  div.innerHTML = `
-    <div class="h">${esc(firm.name)}</div>
-    <div class="small">Preis für <b>${esc(productLabel(product))}</b> (€/t)</div>
-    <div class="r"><input id="priceInput" type="number" step="0.01" value="${isFinite(current)?current:""}"></div>
-    <div class="note">Enter = speichern · Esc = schließen</div>
-  `;
-
-  const popup = L.popup({closeButton:true, autoClose:true, closeOnClick:true})
-    .setLatLng(latlng)
-    .setContent(div)
-    .openOn(map);
-
-  setTimeout(()=>{
-    const inp = div.querySelector("#priceInput");
-    inp.focus(); inp.select();
-    inp.addEventListener("keydown",(e)=>{
-      if(e.key==="Enter"){
-        const v = toNum(inp.value);
-        if(isFinite(v) && v>0){
-          priceOverrides[firm.id] = priceOverrides[firm.id] || {};
-          priceOverrides[firm.id][product] = v;
-          saveLS(LS_PRICE_OVERRIDES_KEY, priceOverrides);
-          map.closePopup(popup);
-          renderMarkers();
-          calculate();
-        }
-      }
-      if(e.key==="Escape"){
-        map.closePopup(popup);
-      }
-    });
-  }, 30);
-}
-
-/* =========================
    Copy offer text
    ========================= */
 async function copyOfferText(customer, row, inputs, routeKm){
@@ -1153,15 +440,20 @@ async function copyOfferText(customer, row, inputs, routeKm){
   const marginPerT = isFinite(targetVk) ? (targetVk - row.deliveredPerT) : NaN;
   const profitTotal = isFinite(marginPerT) ? (marginPerT * qtyT) : NaN;
 
+  const zoneCust = (isFinite(customer.lat)&&isFinite(customer.lon)) ? getZoneNameForLatLng(customer.lat, customer.lon) : "";
+  const zoneFirm = (isFinite(row.f.lat)&&isFinite(row.f.lon)) ? getZoneNameForLatLng(row.f.lat, row.f.lon) : "";
+
   const text =
 `Angebots-Vorschlag
 Kunde: ${customer.name}
 Adresse: ${customer.address}
+Zone: ${zoneCust || "-"}
 Produkt: ${productLabel(product)}
 Menge: ${qtyT} t
 
 Firma: ${row.f.name}
 Adresse: ${row.f.address}
+Zone: ${zoneFirm || "-"}
 Stand: ${row.f.stand || "—"}
 Luftlinie: ${row.kmAir.toFixed(1)} km
 Route: ${routeKm && isFinite(routeKm) ? routeKm.toFixed(1) : "—"} km
@@ -1241,8 +533,9 @@ function updateCustomerKpi(c){
     document.getElementById("ordersBox").style.display = "none";
     return;
   }
+  const zoneName = (isFinite(c.lat)&&isFinite(c.lon)) ? getZoneNameForLatLng(c.lat, c.lon) : "";
   document.getElementById("kpiCustomer").textContent = c.name || "—";
-  document.getElementById("kpiCustomerAddr").textContent = c.address || "—";
+  document.getElementById("kpiCustomerAddr").textContent = (c.address || "—") + (zoneName ? ` · Zone: ${zoneName}` : "");
   document.getElementById("kpiRoute").textContent = "—";
 }
 
