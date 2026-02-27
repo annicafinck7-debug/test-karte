@@ -667,6 +667,7 @@ function firmColorByProduct(product){
 
   return palettes[scheme]?.[product] || "#2563eb";
 }
+  
 function firmFillColor(f, inputs){ return firmColorByProduct(inputs.product); }
 
 function renderMarkers(){
@@ -707,17 +708,16 @@ function renderMarkers(){
   firms.forEach(f=>{
     if(!isFinite(f.lat)||!isFinite(f.lon)) return;
 
-    const fill = firmFillColor(f, inputs);
-    const standTxt = f.stand ? ` (${f.stand})` : "";
-    const sackInfoTxt = f.sackInfo ? ` · Info: ${f.sackInfo}` : "";
+    const isActive = firmHasProduct(f, inputs.product);
+const fill = firmFillColor(f, inputs);
 
-    const m = L.circleMarker([f.lat,f.lon], {
-      radius:7,
-      color: outline,
-      weight: 2,
-      fillColor: fill,
-      fillOpacity:.9
-    }).addTo(map);
+const m = L.circleMarker([f.lat,f.lon], {
+  radius: isActive ? 7 : 6,
+  color: outline,
+  weight: isActive ? 2 : 1,
+  fillColor: fill,
+  fillOpacity: isActive ? 0.95 : 0.25   // ✅ ausgegraut wenn kein Produkt
+}).addTo(map);
 
     m.bindTooltip(
       `<b>${esc(f.name)}</b><br>${esc(f.address)}<br><span class="small">Stand${esc(standTxt)}${esc(sackInfoTxt)}</span>`,
@@ -732,7 +732,22 @@ function renderMarkers(){
   });
 
 }
+function getEffectiveBase(f, product){
+  const override = priceOverrides?.[f.id]?.[product];
+  const base = isFinite(override) ? override : f.base?.[product];
+  return base;
+}
 
+function firmHasProduct(f, product){
+  const base = getEffectiveBase(f, product);
+  return isFinite(base) && base > 0;
+}
+
+function firmFillColor(f, inputs){
+  // ✅ nur Firmen mit diesem Produkt bekommen die Farbe
+  if(!firmHasProduct(f, inputs.product)) return "#9ca3af"; // grau
+  return firmColorByProduct(inputs.product);
+}
 /* =========================
    UI + Autocomplete
    ========================= */
