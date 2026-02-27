@@ -644,11 +644,27 @@ function customerTriangleIcon(){
 
 function firmColorByProduct(product){
   const scheme = document.getElementById("colorScheme")?.value || "standard";
+
   const palettes = {
-    standard: { lose:"#2563eb", sackware:"#f59e0b", industrieware:"#16a34a" },
-    pink:     { lose:"#db2777", sackware:"#f472b6", industrieware:"#fb7185" },
-    pastel:   { lose:"#93c5fd", sackware:"#fdba74", industrieware:"#86efac" }
+    standard: {
+      lose: "#2563eb",        // Blau
+      sackware: "#f59e0b",    // Orange
+      industrieware: "#16a34a"// Grün
+    },
+
+    pink: {
+      lose: "#e11d48",        // Starkes Pink
+      sackware: "#ec4899",    // Pink
+      industrieware: "#f9a8d4"// Pastell Pink
+    },
+
+    pastel: {
+      lose: "#93c5fd",
+      sackware: "#fdba74",
+      industrieware: "#86efac"
+    }
   };
+
   return palettes[scheme]?.[product] || "#2563eb";
 }
 function firmFillColor(f, inputs){ return firmColorByProduct(inputs.product); }
