@@ -241,13 +241,6 @@
 <body>
 <div id="map"></div>
 
-<div class="legend" id="legend">
-  <div class="t">Produkt-Farben</div>
-  <div class="r"><span class="sw" id="swLose"></span> Lose</div>
-  <div class="r"><span class="sw" id="swSack"></span> Sackware</div>
-  <div class="r"><span class="sw" id="swInd"></span> Industrieware</div>
-</div>
-
 <div class="topbar" id="topbar">
   <div class="brand">Verkaufs-Karte</div>
 
@@ -430,7 +423,6 @@ async function init(){
   updateCustomerKpi(null);
   updateLoadStatusCounts();
   updateMiniKpis({good:0, mid:0, bad:0});
-  updateLegend();
 }
 
 /* =========================
@@ -661,12 +653,6 @@ function firmColorByProduct(product){
 }
 function firmFillColor(f, inputs){ return firmColorByProduct(inputs.product); }
 
-function updateLegend(){
-  document.getElementById("swLose").style.background = firmColorByProduct("lose");
-  document.getElementById("swSack").style.background = firmColorByProduct("sackware");
-  document.getElementById("swInd").style.background  = firmColorByProduct("industrieware");
-}
-
 function renderMarkers(){
   customerMarkers.forEach(m=>m.remove());
   firmMarkers.forEach(m=>m.remove());
@@ -729,7 +715,6 @@ function renderMarkers(){
     firmMarkers.push(m);
   });
 
-  updateLegend();
 }
 
 /* =========================
