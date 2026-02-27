@@ -217,7 +217,6 @@
       border:1px solid var(--ui-border) !important;
     }
 
-    /* ✅ NEU: kleine Legende */
     .legend{
       position:absolute;
       right:12px;
@@ -383,7 +382,12 @@ let customerMarkers=[], firmMarkers=[];
 let selectedCustomer=null;
 let routeLayer=null;
 
+/* ✅ AUFTRÄGE: jetzt echte Daten + Indizes */
 let deliveriesLoaded = false;
+let deliveries = [];
+let delivByCustomer = new Map();   // key(customerNameNorm) -> count
+let delivByFirm = new Map();       // key(firmNameNorm) -> count
+let delivByPair = new Map();       // key(customerNorm + "||" + firmNorm) -> count
 
 let geoCache = loadLS(LS_GEO_CACHE_KEY, {});
 let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
@@ -424,7 +428,7 @@ async function init(){
 }
 
 /* =========================
-   CSV
+   CSV (robust: erkennt ; automatisch)
    ========================= */
 function parseCsv(url){
   return new Promise((resolve, reject)=>{
@@ -432,8 +436,26 @@ function parseCsv(url){
       download:true,
       header:true,
       skipEmptyLines:true,
+      delimiter: "", // auto
       transformHeader: (h) => String(h||"").trim().toLowerCase(),
-      complete: (res)=>resolve(res.data),
+      complete: (res)=>{
+        const first = res?.data?.[0];
+        const keys = first ? Object.keys(first) : [];
+        // Wenn alles in 1 Spalte klebt -> neu mit ';'
+        if(first && keys.length <= 1){
+          Papa.parse(url, {
+            download:true,
+            header:true,
+            skipEmptyLines:true,
+            delimiter: ";",
+            transformHeader: (h) => String(h||"").trim().toLowerCase(),
+            complete: (res2)=>resolve(res2.data),
+            error: reject
+          });
+          return;
+        }
+        resolve(res.data);
+      },
       error: reject
     });
   });
@@ -496,15 +518,81 @@ async function loadFirms(){
 }
 
 /* =========================
-   Deliveries (nur Status)
+   ✅ Deliveries (Aufträge/Touren)
    ========================= */
+function normName(s){
+  return String(s||"")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g," ")
+    .replace(/[.,;:_/\\|()\-–—]/g,"")
+    .replace(/ä/g,"ae").replace(/ö/g,"oe").replace(/ü/g,"ue").replace(/ß/g,"ss");
+}
+function pickAny(r, keys){
+  for(const k of keys){
+    const v = r[k];
+    if(v !== undefined && v !== null && String(v).trim() !== "") return String(v).trim();
+  }
+  return "";
+}
+
 async function loadDeliveries(){
   try{
-    await parseCsv(CONFIG.deliveriesCsvUrl);
+    const rows = await parseCsv(CONFIG.deliveriesCsvUrl);
+
+    // wir speichern die Aufträge (nur was wir brauchen)
+    deliveries = rows.map(r=>{
+      const customerName = pickAny(r, ["kunde","kundenname","customer","empfaenger","empfänger","abnehmer","ziel","lieferadresse","kund"]);
+      const firmName     = pickAny(r, ["firma","werk","lieferant","supplier","produzent","lieferwerk","werkname"]);
+      const date         = pickAny(r, ["datum","date","lieferdatum"]);
+      const qty          = toNum(pickAny(r, ["menge","tonnen","t","qty","quantity","gewicht"]));
+      return { customerName, firmName, date, qty, raw:r };
+    }).filter(d => d.customerName || d.firmName);
+
+    // Indizes bauen
+    delivByCustomer = new Map();
+    delivByFirm = new Map();
+    delivByPair = new Map();
+
+    for(const d of deliveries){
+      const cK = normName(d.customerName);
+      const fK = normName(d.firmName);
+
+      if(cK){
+        delivByCustomer.set(cK, (delivByCustomer.get(cK) || 0) + 1);
+      }
+      if(fK){
+        delivByFirm.set(fK, (delivByFirm.get(fK) || 0) + 1);
+      }
+      if(cK && fK){
+        const pK = cK + "||" + fK;
+        delivByPair.set(pK, (delivByPair.get(pK) || 0) + 1);
+      }
+    }
+
     deliveriesLoaded = true;
   }catch(e){
     deliveriesLoaded = false;
+    deliveries = [];
+    delivByCustomer = new Map();
+    delivByFirm = new Map();
+    delivByPair = new Map();
   }
+}
+
+function getCustomerOrdersCount(c){
+  const k = normName(c?.name);
+  return k ? (delivByCustomer.get(k) || 0) : 0;
+}
+function getFirmOrdersCount(f){
+  const k = normName(f?.name);
+  return k ? (delivByFirm.get(k) || 0) : 0;
+}
+function getPairOrdersCount(c, f){
+  const cK = normName(c?.name);
+  const fK = normName(f?.name);
+  if(!cK || !fK) return 0;
+  return delivByPair.get(cK + "||" + fK) || 0;
 }
 
 /* =========================
@@ -553,7 +641,11 @@ function updateLoadStatusCounts(prefix=""){
   const totalF = firms.length;
   const doneC = customers.filter(c=>isFinite(c.lat)&&isFinite(c.lon)).length;
   const doneF = firms.filter(f=>isFinite(f.lat)&&isFinite(f.lon)).length;
-  const delivTxt = deliveriesLoaded ? ` · Aufträge ✓` : ` · Aufträge —`;
+
+  const delivTxt = deliveriesLoaded
+    ? ` · Aufträge ${deliveries.length}`
+    : ` · Aufträge —`;
+
   setLoadStatus(`${prefix}${prefix? " · ":""}Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}${delivTxt}`);
 }
 
@@ -603,12 +695,11 @@ function customerTriangleIcon(){
 function firmColorByProduct(product){
   const scheme = document.getElementById("colorScheme")?.value || "standard";
 
-  // ✅ JETZT RICHTIG DEUTLICH: Blau / Orange / Grün
   const palettes = {
     standard: {
-      lose: "#2563eb",         // Blau
-      sackware: "#f59e0b",     // Orange
-      industrieware: "#16a34a" // Grün
+      lose: "#2563eb",
+      sackware: "#f59e0b",
+      industrieware: "#16a34a"
     },
     pink: {
       lose: "#db2777",
@@ -630,7 +721,6 @@ function firmFillColor(f, inputs){
 }
 
 function updateLegend(){
-  const scheme = document.getElementById("colorScheme")?.value || "standard";
   document.getElementById("swLose").style.background = firmColorByProduct("lose");
   document.getElementById("swSack").style.background = firmColorByProduct("sackware");
   document.getElementById("swInd").style.background  = firmColorByProduct("industrieware");
@@ -648,7 +738,10 @@ function renderMarkers(){
     const accTxt =
       `Lose: ${c.accepts?.lose ? "✓" : "—"} · Sackware: ${c.accepts?.sackware ? "✓" : "—"} · Industrie: ${c.accepts?.industrieware ? "✓" : "—"}`;
 
-    m.bindTooltip(`<b>${esc(c.name)}</b><br>${esc(c.address)}<br><span class="small">${esc(accTxt)}</span>`, {direction:"top"});
+    const orders = deliveriesLoaded ? getCustomerOrdersCount(c) : 0;
+    const ordersTxt = deliveriesLoaded ? ` · Aufträge: ${orders}` : "";
+
+    m.bindTooltip(`<b>${esc(c.name)}</b><br>${esc(c.address)}<br><span class="small">${esc(accTxt)}${esc(ordersTxt)}</span>`, {direction:"top"});
 
     m.on("click", ()=>{
       selectCustomer(c);
@@ -657,6 +750,7 @@ function renderMarkers(){
           <div class="h">${esc(c.name)}</div>
           <div class="small">${esc(c.address)}</div>
           <div class="small" style="margin-top:6px;">Annahme: ${esc(accTxt)}</div>
+          <div class="small" style="margin-top:6px;">Aufträge: <b>${deliveriesLoaded ? orders : "—"}</b></div>
         </div>
       `;
       L.popup({closeButton:true, autoClose:true, closeOnClick:true})
@@ -678,6 +772,9 @@ function renderMarkers(){
     const standTxt = f.stand ? ` (${f.stand})` : "";
     const sackInfoTxt = f.sackInfo ? ` · Info: ${f.sackInfo}` : "";
 
+    const orders = deliveriesLoaded ? getFirmOrdersCount(f) : 0;
+    const ordersTxt = deliveriesLoaded ? ` · Aufträge: ${orders}` : "";
+
     const m = L.circleMarker([f.lat,f.lon], {
       radius:7,
       color: outline,
@@ -687,7 +784,7 @@ function renderMarkers(){
     }).addTo(map);
 
     m.bindTooltip(
-      `<b>${esc(f.name)}</b><br>${esc(f.address)}<br><span class="small">Stand${esc(standTxt)}${esc(sackInfoTxt)}</span>`,
+      `<b>${esc(f.name)}</b><br>${esc(f.address)}<br><span class="small">Stand${esc(standTxt)}${esc(sackInfoTxt)}${esc(ordersTxt)}</span>`,
       {direction:"top"}
     );
 
@@ -899,7 +996,9 @@ function calculate(){
     let marginPerT = null;
     if(isFinite(targetVk)) marginPerT = targetVk - deliveredPerT;
 
-    results.push({f, kmAir, base, freightPerT, deliveredPerT, deliveredTotal, marginPerT});
+    const tours = deliveriesLoaded ? getPairOrdersCount(selectedCustomer, f) : 0;
+
+    results.push({f, kmAir, base, freightPerT, deliveredPerT, deliveredTotal, marginPerT, tours});
   }
 
   results.sort((a,b)=>a.deliveredPerT - b.deliveredPerT);
@@ -931,6 +1030,7 @@ function calculate(){
         <th>Firma</th>
         <th>KM</th>
         <th>Preis</th>
+        <th>Touren</th>
         <th>${isFinite(targetVk) ? "Marge" : "Info"}</th>
       </tr>
     </thead>
@@ -951,6 +1051,7 @@ function calculate(){
         <b>${fmt(row.deliveredPerT)} €/t</b><br>
         <span class="small">${fmt(row.deliveredTotal)} € für ${fmt(qtyT,1)} t</span>
       </td>
+      <td><b>${deliveriesLoaded ? row.tours : "—"}</b></td>
       <td>${makeBadge(row, targetVk)}</td>
     `;
 
@@ -1040,6 +1141,8 @@ function showDetail(row, inputs, routeKm){
   const marginPerT = isFinite(targetVk) ? (targetVk - row.deliveredPerT) : NaN;
   const profitTotal = isFinite(marginPerT) ? (marginPerT * qtyT) : NaN;
 
+  const tours = deliveriesLoaded ? getPairOrdersCount(selectedCustomer, row.f) : null;
+
   grid.innerHTML = `
     ${kv("Adresse", row.f.address)}
     ${kv("Stand", row.f.stand ? row.f.stand : "—")}
@@ -1051,6 +1154,7 @@ function showDetail(row, inputs, routeKm){
     ${kv("Fracht", `${fmt(row.freightPerT)} €/t`)}
     ${kv("Lieferpreis", `${fmt(row.deliveredPerT)} €/t`)}
     ${kv("Gesamtpreis", `${fmt(row.deliveredTotal)} €`)}
+    ${kv("Touren (Historie)", deliveriesLoaded ? String(tours) : "—")}
     ${kv("Ziel-VK", isFinite(targetVk) ? `${fmt(targetVk)} €/t` : "—")}
     ${kv("Marge", isFinite(marginPerT) ? `${fmt(marginPerT)} €/t` : "—")}
     ${kv("Gewinn gesamt", isFinite(profitTotal) ? `${fmt(profitTotal)} €` : "—")}
@@ -1117,6 +1221,8 @@ async function copyOfferText(customer, row, inputs, routeKm){
   const marginPerT = isFinite(targetVk) ? (targetVk - row.deliveredPerT) : NaN;
   const profitTotal = isFinite(marginPerT) ? (marginPerT * qtyT) : NaN;
 
+  const tours = deliveriesLoaded ? getPairOrdersCount(customer, row.f) : null;
+
   const text =
 `Angebots-Vorschlag
 Kunde: ${customer.name}
@@ -1127,6 +1233,7 @@ Menge: ${qtyT} t
 Firma: ${row.f.name}
 Adresse: ${row.f.address}
 Stand: ${row.f.stand || "—"}
+Touren (Historie): ${deliveriesLoaded ? tours : "—"}
 Luftlinie: ${row.kmAir.toFixed(1)} km
 Route: ${routeKm && isFinite(routeKm) ? routeKm.toFixed(1) : "—"} km
 
@@ -1205,7 +1312,9 @@ function updateCustomerKpi(c){
     return;
   }
   document.getElementById("kpiCustomer").textContent = c.name || "—";
-  document.getElementById("kpiCustomerAddr").textContent = c.address || "—";
+  const orders = deliveriesLoaded ? getCustomerOrdersCount(c) : null;
+  document.getElementById("kpiCustomerAddr").textContent =
+    `${c.address || "—"}${deliveriesLoaded ? " · Aufträge: " + orders : ""}`;
   document.getElementById("kpiRoute").textContent = "—";
 }
 
@@ -1243,7 +1352,7 @@ function getStandFromRow(r){
 function toNum(v){
   if(v===null || v===undefined) return NaN;
   if(typeof v==="number") return v;
-  const s = String(v).trim().replace(",", ".").replace("€","").trim();
+  const s = String(v).trim().replace(/\./g,"").replace(",", ".").replace("€","").trim();
   const n = parseFloat(s);
   return Number.isFinite(n) ? n : NaN;
 }
