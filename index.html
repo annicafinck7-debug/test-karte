@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="de">
 <head>
   <meta charset="utf-8"/>
@@ -42,56 +42,9 @@
       --popup-bg:#ffffff;
       --popup-text:#0f172a;
       --popup-border:rgba(15,23,42,.12);
-
-      /* KPI / Accents */
-      --pill-bg:rgba(15,23,42,.05);
-      --pill-border:rgba(15,23,42,.12);
-      --good:#16a34a;
-      --mid:#f59e0b;
-      --bad:#dc2626;
-
-      /* Map */
-      --map-zoom-bg:#ffffff;
-      --map-zoom-text:#0f172a;
-      --map-zoom-border:rgba(15,23,42,.15);
     }
 
-    /* Dark mode variables */
-    body.dark{
-      --ui-bg:#0b1220;
-      --ui-text:#e5e7eb;
-      --ui-muted:#a3adc2;
-      --ui-border:rgba(148,163,184,.18);
-      --ui-soft:rgba(148,163,184,.10);
-      --ui-soft2:rgba(148,163,184,.14);
-      --ui-shadow:0 12px 34px rgba(0,0,0,.35);
-
-      --inp-bg:#0f172a;
-      --inp-text:#e5e7eb;
-      --inp-border:rgba(148,163,184,.22);
-      --inp-ph:rgba(229,231,235,.55);
-      --inp-focus:rgba(59,130,246,.55);
-
-      --btn-bg:rgba(148,163,184,.10);
-      --btn-border:rgba(148,163,184,.22);
-      --btn-text:#e5e7eb;
-
-      --btn-primary:#22c55e;
-      --btn-primary-text:#052e16;
-
-      --popup-bg:#0f172a;
-      --popup-text:#e5e7eb;
-      --popup-border:rgba(148,163,184,.22);
-
-      --pill-bg:rgba(148,163,184,.10);
-      --pill-border:rgba(148,163,184,.22);
-
-      --map-zoom-bg:#0f172a;
-      --map-zoom-text:#e5e7eb;
-      --map-zoom-border:rgba(148,163,184,.22);
-    }
-
-    html,body{height:100%;margin:0;background:var(--ui-bg)}
+    html,body{height:100%;margin:0;background:#ffffff}
     #map{
       position:absolute;
       inset:0;
@@ -116,9 +69,7 @@
 
       font:14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
       color:var(--ui-text);
-      backdrop-filter: blur(6px);
     }
-
     .brand{font-weight:900; white-space:nowrap; margin-right:4px;}
     .field{display:flex; flex-direction:column; gap:4px}
     .field label{font-size:11px; color:var(--ui-muted); margin-left:2px}
@@ -136,7 +87,6 @@
     .field input:focus,.field select:focus{border-color:var(--inp-focus); box-shadow:0 0 0 3px rgba(37,99,235,.12)}
     .w240{min-width:240px}
     .w140{min-width:140px}
-    .w110{min-width:110px}
 
     .btn{
       height:34px;
@@ -147,39 +97,25 @@
       color:var(--btn-text);
       cursor:pointer;
       font-weight:800;
-      transition: transform .06s ease, filter .15s ease;
     }
     .btn.primary{
       background:var(--btn-primary);
       border-color:var(--btn-primary);
       color:var(--btn-primary-text);
     }
-    .btn:hover{filter:brightness(1.04)}
     .btn:active{transform:translateY(1px)}
-
-    .pill{
+    #loadStatus{
+      margin-left:auto;
       align-self:center;
-      padding:6px 10px;
-      border-radius:999px;
-      border:1px solid var(--pill-border);
-      background:var(--pill-bg);
-      white-space:nowrap;
       font-weight:900;
       color:var(--ui-text);
-      display:flex;
-      gap:8px;
-      align-items:center;
+      opacity:.9;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--ui-border);
+      background:var(--ui-soft);
+      white-space:nowrap;
     }
-
-    #loadStatus{ margin-left:auto; }
-    .dot{
-      width:8px;height:8px;border-radius:50%;
-      background:rgba(148,163,184,.8);
-      display:inline-block;
-    }
-    .dot.good{background:var(--good)}
-    .dot.mid{background:var(--mid)}
-    .dot.bad{background:var(--bad)}
 
     /* Autocomplete */
     .ac{
@@ -278,9 +214,9 @@
       white-space:nowrap;
       color:var(--ui-text);
     }
-    .good{background:rgba(22,163,74,.14); border-color:rgba(22,163,74,.35); color:var(--good)}
-    .mid{background:rgba(245,158,11,.16); border-color:rgba(245,158,11,.35); color:var(--mid)}
-    .bad{background:rgba(220,38,38,.14); border-color:rgba(220,38,38,.35); color:var(--bad)}
+    .good{background:rgba(0,180,90,.10); border-color:rgba(0,180,90,.25); color:#065f46}
+    .mid{background:rgba(245,158,11,.12); border-color:rgba(245,158,11,.25); color:#92400e}
+    .bad{background:rgba(239,68,68,.10); border-color:rgba(239,68,68,.25); color:#991b1b}
 
     .leaflet-popup-content-wrapper, .leaflet-popup-tip{
       background:var(--popup-bg);
@@ -320,17 +256,9 @@
     .deliv .n{font-weight:900; opacity:.95}
 
     .leaflet-control-zoom a{
-      color:var(--map-zoom-text) !important;
-      background:var(--map-zoom-bg) !important;
-      border:1px solid var(--map-zoom-border) !important;
-    }
-
-    /* Mobile: Panel narrower */
-    @media (max-width: 720px){
-      .panel{width: calc(100vw - 24px); right:12px;}
-      .kpis{grid-template-columns:1fr;}
-      .detail-grid{grid-template-columns:1fr;}
-      .w240{min-width: 200px;}
+      color:#0f172a !important;
+      background:#ffffff !important;
+      border:1px solid rgba(15,23,42,.15) !important;
     }
   </style>
 </head>
@@ -355,6 +283,7 @@
     </select>
   </div>
 
+  <!-- ✅ NEU: Farbschema -->
   <div class="field w140">
     <label>Farbschema</label>
     <select id="colorScheme">
@@ -362,11 +291,6 @@
       <option value="pink">Pink</option>
       <option value="pastel">Pastell</option>
     </select>
-  </div>
-
-  <div class="field w110">
-    <label>UI</label>
-    <button class="btn" id="btnTheme" title="Hell/Dunkel umschalten">🌙</button>
   </div>
 
   <div class="field w140">
@@ -397,12 +321,7 @@
   <button class="btn primary" id="btnCalc">Berechnen</button>
   <button class="btn" id="btnGeo">Geocoden</button>
 
-  <div class="pill" id="loadStatus"><span class="dot"></span> —</div>
-  <div class="pill" id="miniKpi" title="Schnellübersicht">
-    <span class="dot good"></span><span id="miniGood">0</span>
-    <span class="dot mid"></span><span id="miniMid">0</span>
-    <span class="dot bad"></span><span id="miniBad">0</span>
-  </div>
+  <div id="loadStatus">—</div>
 </div>
 
 <div id="ac" class="ac"></div>
@@ -427,7 +346,7 @@
       <div class="kpi">
         <div class="h">Routing</div>
         <div class="v" id="kpiRoute">—</div>
-        <div class="small">Klick auf Zeile lädt Route</div>
+        <div class="small">Beim Klick wird Route geladen</div>
       </div>
     </div>
 
@@ -438,7 +357,6 @@
 
     <div class="small" style="margin:6px 0 10px 0">
       Klick auf Zeile: Route + Details + kopiert Angebotstext. Rechtsklick auf Firma: Preis ändern (Enter).
-      Klick auf Karte: Route ausblenden.
     </div>
 
     <div id="results"></div>
@@ -459,11 +377,15 @@ const CONFIG = {
 /* =========================
    LocalStorage Keys
    ========================= */
-const LS_GEO_CACHE_KEY = "salesMap_geoCache_v7";
-const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v7";
-const LS_PANEL_POS_KEY = "salesMap_panelPos_v7";
-const LS_COLOR_SCHEME_KEY = "salesMap_colorScheme_v2";
-const LS_THEME_KEY = "salesMap_theme_v1";
+const LS_GEO_CACHE_KEY = "salesMap_geoCache_v6";
+const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v6";
+const LS_PANEL_POS_KEY = "salesMap_panelPos_v6";
+
+/* ✅ NEU: Farbschema merken */
+const LS_COLOR_SCHEME_KEY = "salesMap_colorScheme_v1";
+
+let geoCache = loadLS(LS_GEO_CACHE_KEY, {});
+let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
 
 /* =========================
    State
@@ -477,31 +399,21 @@ let lastRouteKm=null;
 let deliveriesByCustomer = new Map();
 let deliveriesLoaded = false;
 
-let geoCache = loadLS(LS_GEO_CACHE_KEY, {});
-let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
-
 /* =========================
    Init
    ========================= */
 init();
 
 async function init(){
-  applyThemeFromLS();
-
   map = L.map('map', { worldCopyJump:true }).setView([51.2, 10.4], 6);
 
-  // ✅ Moderner, cleaner Basemap
-  // Light Theme: Carto Light
-  // Dark Theme: Carto Dark (wird automatisch gewechselt)
-  addBaseMap();
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
 
   initPanelDrag();
   initUI();
-
-  map.on("click", ()=>{
-    clearRoute();
-    hideDetail();
-  });
 
   setLoadStatus("Lade Tabellen …");
   await Promise.all([loadCustomers(), loadFirms(), loadDeliveries()]);
@@ -509,27 +421,6 @@ async function init(){
   renderMarkers();
   updateCustomerKpi(null);
   updateLoadStatusCounts();
-  updateMiniKpis({good:0, mid:0, bad:0});
-}
-
-/* =========================
-   Basemap switch
-   ========================= */
-let baseLayer = null;
-function addBaseMap(){
-  if(baseLayer){
-    try{ map.removeLayer(baseLayer); }catch(e){}
-  }
-  const isDark = document.body.classList.contains("dark");
-  const url = isDark
-    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-    : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
-
-  baseLayer = L.tileLayer(url, {
-    attribution: "&copy; OpenStreetMap & Carto",
-    subdomains: "abcd",
-    maxZoom: 19
-  }).addTo(map);
 }
 
 /* =========================
@@ -714,48 +605,29 @@ function customerTriangleIcon(){
   return L.divIcon({ html:`<div class="tri"></div>`, className:"", iconSize:[20,18], iconAnchor:[10,18] });
 }
 
+/* ✅ NEU: Farbe nach Produkt + ausgewähltem Farbschema */
 function firmColorByProduct(product){
   const scheme = document.getElementById("colorScheme")?.value || "standard";
 
   const palettes = {
-    standard: { lose: "#8b5cf6", sackware: "#a855f7", industrieware: "#6d28d9" },
-    pink:     { lose: "#ec4899", sackware: "#f472b6", industrieware: "#fb7185" },
-    pastel:   { lose: "#f9a8d4", sackware: "#fbcfe8", industrieware: "#fda4af" }
+    standard: {
+      lose: "#8b5cf6",
+      sackware: "#a855f7",
+      industrieware: "#6d28d9"
+    },
+    pink: {
+      lose: "#ec4899",
+      sackware: "#f472b6",
+      industrieware: "#fb7185"
+    },
+    pastel: {
+      lose: "#f9a8d4",
+      sackware: "#fbcfe8",
+      industrieware: "#fda4af"
+    }
   };
 
-  return palettes[scheme]?.[product] || "#8b5cf6";
-}
-
-function calcDeliveredForFirm(f, inputs){
-  if(!selectedCustomer || !isFinite(selectedCustomer.lat) || !isFinite(selectedCustomer.lon)) return null;
-
-  const kmAir = haversineKm(selectedCustomer.lat, selectedCustomer.lon, f.lat, f.lon);
-  const override = priceOverrides?.[f.id]?.[inputs.product];
-  const base = isFinite(override) ? override : f.base[inputs.product];
-  if(!isFinite(base) || base <= 0) return null;
-
-  const freightPerT = (kmAir * inputs.freightPerKm / inputs.qtyT) * inputs.factor;
-  const deliveredPerT = base + freightPerT;
-
-  let marginPerT = NaN;
-  if(isFinite(inputs.targetVk)) marginPerT = inputs.targetVk - deliveredPerT;
-
-  return { kmAir, base, freightPerT, deliveredPerT, marginPerT };
-}
-
-function firmFillColor(f, inputs){
-  // Wenn Ziel-VK gesetzt ist: grün/orange/rot nach Marge
-  if(isFinite(inputs.targetVk)){
-    const calc = calcDeliveredForFirm(f, inputs);
-    if(!calc) return "#94a3b8";
-    const m = calc.marginPerT;
-    if(!isFinite(m)) return "#94a3b8";
-    if(m >= 10) return "#16a34a";
-    if(m >= 0)  return "#f59e0b";
-    return "#dc2626";
-  }
-  // sonst: nach Produkt + Farbschema
-  return firmColorByProduct(inputs.product);
+  return palettes[scheme]?.[product] || "#ec4899";
 }
 
 function buildDeliveriesHtml(customerName){
@@ -811,34 +683,21 @@ function renderMarkers(){
     customerMarkers.push(m);
   });
 
-  const inputs = getInputs();
-  const hoverOutline = document.body.classList.contains("dark")
-    ? "rgba(229,231,235,.9)"
-    : "rgba(15,23,42,.9)";
+  const product = document.getElementById("product")?.value || "lose";
+  const fill = firmColorByProduct(product);
 
   firms.forEach(f=>{
     if(!isFinite(f.lat)||!isFinite(f.lon)) return;
 
-    const fill = firmFillColor(f, inputs);
-
     const m = L.circleMarker([f.lat,f.lon], {
-      radius: 7,
-      color: hoverOutline,
+      radius:7,
+      color: "rgba(15,23,42,.85)",
       weight: 2,
       fillColor: fill,
-      fillOpacity: .88
+      fillOpacity:.85
     }).addTo(map);
 
     m.bindTooltip(`<b>${esc(f.name)}</b><br>${esc(f.address)}`, {direction:"top"});
-
-    // ✅ Glow / Highlight
-    m.on("mouseover", ()=>{
-      m.setStyle({ radius: 9, weight: 3, fillOpacity: 1 });
-    });
-    m.on("mouseout", ()=>{
-      m.setStyle({ radius: 7, weight: 2, fillOpacity: .88 });
-    });
-
     m.on("contextmenu", (e)=>openRightClickPricePopup(f, e.latlng));
     firmMarkers.push(m);
   });
@@ -856,33 +715,18 @@ function initUI(){
   document.getElementById("btnGeo").addEventListener("click", geocodeAll);
   document.getElementById("btnCalc").addEventListener("click", calculate);
 
-  // Theme toggle
-  document.getElementById("btnTheme").addEventListener("click", ()=>{
-    document.body.classList.toggle("dark");
-    saveLS(LS_THEME_KEY, document.body.classList.contains("dark") ? "dark" : "light");
-    addBaseMap();
-    renderMarkers();
-    if(selectedCustomer) calculate();
-  });
-
   document.getElementById("product").addEventListener("change", ()=>{
     renderMarkers();
     if(selectedCustomer) calculate();
   });
 
-  // Farbschema merken
+  /* ✅ NEU: Farbschema wechseln */
   const schemeSel = document.getElementById("colorScheme");
   const savedScheme = loadLS(LS_COLOR_SCHEME_KEY, "standard");
   schemeSel.value = savedScheme || "standard";
 
   schemeSel.addEventListener("change", ()=>{
     saveLS(LS_COLOR_SCHEME_KEY, schemeSel.value);
-    renderMarkers();
-    if(selectedCustomer) calculate();
-  });
-
-  // Ziel-VK live: Marker + Ergebnis neu
-  document.getElementById("targetVk").addEventListener("input", ()=>{
     renderMarkers();
   });
 
@@ -977,16 +821,6 @@ function initUI(){
   }
 }
 
-function applyThemeFromLS(){
-  const t = loadLS(LS_THEME_KEY, "light");
-  if(t === "dark") document.body.classList.add("dark");
-}
-
-function setLoadStatus(text){
-  const el = document.getElementById("loadStatus");
-  el.innerHTML = `<span class="dot"></span> ${esc(text)}`;
-}
-
 /* =========================
    Customer selection
    ========================= */
@@ -1000,9 +834,6 @@ function selectCustomer(c){
   }
   document.getElementById("panel").classList.remove("hidden");
   invalidateMapSizeSoon();
-
-  // Marker neu färben (Marge-Farben)
-  renderMarkers();
 }
 
 /* =========================
@@ -1027,17 +858,14 @@ function calculate(){
   const out = document.getElementById("results");
   out.innerHTML = "";
   hideDetail();
-  clearRoute();
 
   if(!selectedCustomer || !isFinite(selectedCustomer.lat) || !isFinite(selectedCustomer.lon)){
     out.innerHTML = `<div class="small">Bitte zuerst einen Kunden auswählen (ggf. einmal „Geocoden“ drücken).</div>`;
     document.getElementById("kpiCount").textContent = "—";
-    updateMiniKpis({good:0, mid:0, bad:0});
     return;
   }
 
-  const inputs = getInputs();
-  const {product, radiusKm, qtyT, freightPerKm, factor, targetVk} = inputs;
+  const {product, radiusKm, qtyT, freightPerKm, factor, targetVk} = getInputs();
 
   document.getElementById("kpiQty").textContent = `Menge: ${fmt(qtyT,1)} t`;
   document.getElementById("kpiRoute").textContent = "—";
@@ -1069,22 +897,6 @@ function calculate(){
 
   results.sort((a,b)=>a.deliveredPerT - b.deliveredPerT);
   document.getElementById("kpiCount").textContent = String(results.length);
-
-  // Mini-KPIs: grün/orange/rot counts
-  const counts = {good:0, mid:0, bad:0};
-  if(isFinite(targetVk)){
-    for(const r of results){
-      const m = r.marginPerT;
-      if(!isFinite(m)) continue;
-      if(m >= 10) counts.good++;
-      else if(m >= 0) counts.mid++;
-      else counts.bad++;
-    }
-  }
-  updateMiniKpis(counts);
-
-  // Marker neu (jetzt mit Marge-Farben)
-  renderMarkers();
 
   if(!results.length){
     out.innerHTML = `<div class="small">Keine Firmen im Radius / mit gültigem Preis gefunden.</div>`;
@@ -1124,20 +936,14 @@ function calculate(){
 
     tr.addEventListener("click", async ()=>{
       const routeKm = await drawRouteOSRM(selectedCustomer, row.f);
-      showDetail(row, inputs, routeKm);
-      await copyOfferText(selectedCustomer, row, inputs, routeKm);
+      showDetail(row, getInputs(), routeKm);
+      await copyOfferText(selectedCustomer, row, getInputs(), routeKm);
     });
 
     tbody.appendChild(tr);
   }
 
   out.appendChild(table);
-}
-
-function updateMiniKpis({good, mid, bad}){
-  document.getElementById("miniGood").textContent = String(good ?? 0);
-  document.getElementById("miniMid").textContent  = String(mid ?? 0);
-  document.getElementById("miniBad").textContent  = String(bad ?? 0);
 }
 
 function makeBadge(row, targetVk){
@@ -1154,18 +960,11 @@ function makeBadge(row, targetVk){
 /* =========================
    Routing OSRM
    ========================= */
-function clearRoute(){
+async function drawRouteOSRM(from, to){
   if(routeLayer){
     try{ map.removeLayer(routeLayer); }catch(e){}
     routeLayer = null;
   }
-  lastRouteKm = null;
-  const el = document.getElementById("kpiRoute");
-  if(el) el.textContent = "—";
-}
-
-async function drawRouteOSRM(from, to){
-  clearRoute();
   document.getElementById("kpiRoute").textContent = "lädt…";
 
   const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson`;
@@ -1277,7 +1076,6 @@ function openRightClickPricePopup(firm, latlng){
           priceOverrides[firm.id][product] = v;
           saveLS(LS_PRICE_OVERRIDES_KEY, priceOverrides);
           map.closePopup(popup);
-          renderMarkers();
           calculate();
         }
       }
