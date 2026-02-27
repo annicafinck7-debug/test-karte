@@ -291,6 +291,7 @@
 
   <div class="field w140">
     <label>Fracht €/km</label>
+    <!-- Tipp: Wenn du "1,85" eingeben willst, nutze type="text". Die Formel funktioniert trotzdem -->
     <input id="freightPerKm" type="number" step="0.01" value="1.85">
   </div>
 
@@ -342,7 +343,7 @@
       </div>
     </div>
 
-    <!-- ✅ AUFTRÄGE-BOX (wie vorher) -->
+    <!-- ✅ AUFTRÄGE-BOX -->
     <div class="detail" id="ordersBox" style="display:none">
       <div class="title" id="ordersTitle">Aufträge</div>
       <div id="ordersList" class="small"></div>
@@ -389,10 +390,10 @@ let customerMarkers=[], firmMarkers=[];
 let selectedCustomer=null;
 let routeLayer=null;
 
-/* ✅ AUFTRÄGE (wie dein Sheet: kunde / firma / anzahl) */
+/* ✅ AUFTRÄGE */
 let deliveriesLoaded = false;
-let deliveriesAgg = [];                 // [{kunde, firma, anzahl}]
-let deliveriesByCustomer = new Map();   // kundeNorm -> [{firma, anzahl}]
+let deliveriesAgg = [];
+let deliveriesByCustomer = new Map();
 
 let geoCache = loadLS(LS_GEO_CACHE_KEY, {});
 let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
@@ -522,7 +523,7 @@ async function loadFirms(){
 }
 
 /* =========================
-   ✅ AUFTRÄGE LADEN + INDEX (wie in deinem Screenshot)
+   ✅ AUFTRÄGE LADEN
    Spalten: kunde | firma | anzahl
    ========================= */
 async function loadDeliveries(){
@@ -543,7 +544,6 @@ async function loadDeliveries(){
       deliveriesByCustomer.get(k).push({ firma: d.firma, anzahl: d.anzahl });
     }
 
-    // sort pro kunde: höchste anzahl zuerst
     for(const [k,list] of deliveriesByCustomer.entries()){
       list.sort((a,b)=> (b.anzahl||0) - (a.anzahl||0));
       deliveriesByCustomer.set(k, list);
@@ -855,7 +855,6 @@ function selectCustomer(c){
   updateCustomerKpi(c);
   hideDetail();
 
-  // ✅ AUFTRÄGE wie vorher anzeigen
   renderOrdersForCustomer(c);
 
   if(isFinite(c.lat)&&isFinite(c.lon)){
@@ -867,7 +866,7 @@ function selectCustomer(c){
   renderMarkers();
 }
 
-/* ✅ AUFTRÄGE PANEL RENDERN (Top-Liste) */
+/* ✅ AUFTRÄGE PANEL */
 function renderOrdersForCustomer(c){
   const box = document.getElementById("ordersBox");
   const title = document.getElementById("ordersTitle");
@@ -897,7 +896,6 @@ function renderOrdersForCustomer(c){
     return;
   }
 
-  // wie vorher: Firma + Anzahl
   const rows = list.slice(0, 50).map(x=>{
     const a = Number.isFinite(x.anzahl) ? x.anzahl : 0;
     return `<div class="kv"><div class="k">${esc(x.firma)}</div><div class="v">${esc(String(a))}</div></div>`;
@@ -965,6 +963,7 @@ function calculate(){
     const base = isFinite(override) ? override : f.base[product];
     if(!isFinite(base) || base <= 0) continue;
 
+    // ✅ Pellet-Formel: Fracht €/t aus km, €/km, Menge, Faktor
     const freightPerT = (kmAir * freightPerKm / qtyT) * factor;
     const deliveredPerT = base + freightPerT;
     const deliveredTotal = deliveredPerT * qtyT;
@@ -1328,13 +1327,34 @@ function toInt(v){
   return Number.isFinite(n) ? n : 0;
 }
 
+/* ✅ FIX: Zahl parsing (1.85 UND 1,85 UND 1.234,56) */
 function toNum(v){
   if(v===null || v===undefined) return NaN;
   if(typeof v==="number") return v;
-  const s = String(v).trim().replace(/\./g,"").replace(",", ".").replace("€","").trim();
+
+  let s = String(v).trim();
+  if(!s) return NaN;
+
+  s = s.replace(/[€\s]/g, "");
+
+  const hasComma = s.includes(",");
+  const hasDot   = s.includes(".");
+
+  if(hasComma && hasDot){
+    // "1.234,56" -> "1234.56"
+    s = s.replace(/\./g, "").replace(",", ".");
+  }else if(hasComma && !hasDot){
+    // "1234,56" -> "1234.56"
+    s = s.replace(",", ".");
+  }else{
+    // "1234.56" bleibt, "1,234.56" -> Kommas raus
+    s = s.replace(/,/g, "");
+  }
+
   const n = parseFloat(s);
   return Number.isFinite(n) ? n : NaN;
 }
+
 function str(v){ return (v===null||v===undefined) ? "" : String(v); }
 function fmt(n, dec=2){
   if(!isFinite(n)) return "—";
