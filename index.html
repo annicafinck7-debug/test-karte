@@ -1,4 +1,3 @@
-```html
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -218,7 +217,6 @@
       border:1px solid var(--ui-border) !important;
     }
 
-    /* ✅ NEU: kleine Legende */
     .legend{
       position:absolute;
       right:12px;
@@ -242,6 +240,7 @@
 
 <body>
 <div id="map"></div>
+
 <div class="legend" id="legend">
   <div class="t">Produkt-Farben</div>
   <div class="r"><span class="sw" id="swLose"></span> Lose</div>
@@ -343,6 +342,12 @@
       </div>
     </div>
 
+    <!-- ✅ AUFTRÄGE-BOX (wie vorher) -->
+    <div class="detail" id="ordersBox" style="display:none">
+      <div class="title" id="ordersTitle">Aufträge</div>
+      <div id="ordersList" class="small"></div>
+    </div>
+
     <div class="detail" id="detailBox" style="display:none">
       <div class="title" id="detailTitle">Details</div>
       <div class="detail-grid" id="detailGrid"></div>
@@ -384,7 +389,10 @@ let customerMarkers=[], firmMarkers=[];
 let selectedCustomer=null;
 let routeLayer=null;
 
+/* ✅ AUFTRÄGE (wie dein Sheet: kunde / firma / anzahl) */
 let deliveriesLoaded = false;
+let deliveriesAgg = [];                 // [{kunde, firma, anzahl}]
+let deliveriesByCustomer = new Map();   // kundeNorm -> [{firma, anzahl}]
 
 let geoCache = loadLS(LS_GEO_CACHE_KEY, {});
 let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
@@ -425,7 +433,7 @@ async function init(){
 }
 
 /* =========================
-   CSV
+   CSV (robust: fallback auf ;)
    ========================= */
 function parseCsv(url){
   return new Promise((resolve, reject)=>{
@@ -433,15 +441,32 @@ function parseCsv(url){
       download:true,
       header:true,
       skipEmptyLines:true,
+      delimiter: "", // auto
       transformHeader: (h) => String(h||"").trim().toLowerCase(),
-      complete: (res)=>resolve(res.data),
+      complete: (res)=>{
+        const first = res?.data?.[0];
+        const keys = first ? Object.keys(first) : [];
+        if(first && keys.length <= 1){
+          Papa.parse(url, {
+            download:true,
+            header:true,
+            skipEmptyLines:true,
+            delimiter: ";",
+            transformHeader: (h) => String(h||"").trim().toLowerCase(),
+            complete: (res2)=>resolve(res2.data),
+            error: reject
+          });
+          return;
+        }
+        resolve(res.data);
+      },
       error: reject
     });
   });
 }
 
 /* =========================
-   Kunden (Annahme)
+   Kunden
    ========================= */
 async function loadCustomers(){
   const rows = await parseCsv(CONFIG.customersCsvUrl);
@@ -466,7 +491,7 @@ async function loadCustomers(){
 }
 
 /* =========================
-   Firmen (deine Spalten)
+   Firmen
    ========================= */
 async function loadFirms(){
   const rows = await parseCsv(CONFIG.firmsCsvUrl);
@@ -497,14 +522,38 @@ async function loadFirms(){
 }
 
 /* =========================
-   Deliveries (nur Status)
+   ✅ AUFTRÄGE LADEN + INDEX (wie in deinem Screenshot)
+   Spalten: kunde | firma | anzahl
    ========================= */
 async function loadDeliveries(){
   try{
-    await parseCsv(CONFIG.deliveriesCsvUrl);
+    const rows = await parseCsv(CONFIG.deliveriesCsvUrl);
+
+    deliveriesAgg = rows.map(r=>{
+      const kunde = str(r["kunde"]).trim();
+      const firma = str(r["firma"]).trim();
+      const anzahl = toInt(r["anzahl"]);
+      return { kunde, firma, anzahl };
+    }).filter(x => x.kunde && x.firma);
+
+    deliveriesByCustomer = new Map();
+    for(const d of deliveriesAgg){
+      const k = normText(d.kunde);
+      if(!deliveriesByCustomer.has(k)) deliveriesByCustomer.set(k, []);
+      deliveriesByCustomer.get(k).push({ firma: d.firma, anzahl: d.anzahl });
+    }
+
+    // sort pro kunde: höchste anzahl zuerst
+    for(const [k,list] of deliveriesByCustomer.entries()){
+      list.sort((a,b)=> (b.anzahl||0) - (a.anzahl||0));
+      deliveriesByCustomer.set(k, list);
+    }
+
     deliveriesLoaded = true;
   }catch(e){
     deliveriesLoaded = false;
+    deliveriesAgg = [];
+    deliveriesByCustomer = new Map();
   }
 }
 
@@ -603,35 +652,16 @@ function customerTriangleIcon(){
 
 function firmColorByProduct(product){
   const scheme = document.getElementById("colorScheme")?.value || "standard";
-
-  // ✅ JETZT RICHTIG DEUTLICH: Blau / Orange / Grün
   const palettes = {
-    standard: {
-      lose: "#2563eb",         // Blau
-      sackware: "#f59e0b",     // Orange
-      industrieware: "#16a34a" // Grün
-    },
-    pink: {
-      lose: "#db2777",
-      sackware: "#f472b6",
-      industrieware: "#fb7185"
-    },
-    pastel: {
-      lose: "#93c5fd",
-      sackware: "#fdba74",
-      industrieware: "#86efac"
-    }
+    standard: { lose:"#2563eb", sackware:"#f59e0b", industrieware:"#16a34a" },
+    pink:     { lose:"#db2777", sackware:"#f472b6", industrieware:"#fb7185" },
+    pastel:   { lose:"#93c5fd", sackware:"#fdba74", industrieware:"#86efac" }
   };
-
   return palettes[scheme]?.[product] || "#2563eb";
 }
-
-function firmFillColor(f, inputs){
-  return firmColorByProduct(inputs.product);
-}
+function firmFillColor(f, inputs){ return firmColorByProduct(inputs.product); }
 
 function updateLegend(){
-  const scheme = document.getElementById("colorScheme")?.value || "standard";
   document.getElementById("swLose").style.background = firmColorByProduct("lose");
   document.getElementById("swSack").style.background = firmColorByProduct("sackware");
   document.getElementById("swInd").style.background  = firmColorByProduct("industrieware");
@@ -825,6 +855,9 @@ function selectCustomer(c){
   updateCustomerKpi(c);
   hideDetail();
 
+  // ✅ AUFTRÄGE wie vorher anzeigen
+  renderOrdersForCustomer(c);
+
   if(isFinite(c.lat)&&isFinite(c.lon)){
     map.setView([c.lat,c.lon], Math.max(map.getZoom(), 7), {animate:true});
   }
@@ -832,6 +865,45 @@ function selectCustomer(c){
   setTimeout(()=>map.invalidateSize(), 50);
 
   renderMarkers();
+}
+
+/* ✅ AUFTRÄGE PANEL RENDERN (Top-Liste) */
+function renderOrdersForCustomer(c){
+  const box = document.getElementById("ordersBox");
+  const title = document.getElementById("ordersTitle");
+  const listEl = document.getElementById("ordersList");
+
+  if(!c){
+    box.style.display="none";
+    listEl.innerHTML="";
+    return;
+  }
+
+  if(!deliveriesLoaded){
+    box.style.display="block";
+    title.textContent = "Aufträge";
+    listEl.innerHTML = "—";
+    return;
+  }
+
+  const k = normText(c.name);
+  const list = deliveriesByCustomer.get(k) || [];
+
+  box.style.display="block";
+  title.textContent = `Aufträge (${list.length} Firmen)`;
+
+  if(!list.length){
+    listEl.innerHTML = "Keine Aufträge für diesen Kunden in der Aufträge-Tabelle gefunden.";
+    return;
+  }
+
+  // wie vorher: Firma + Anzahl
+  const rows = list.slice(0, 50).map(x=>{
+    const a = Number.isFinite(x.anzahl) ? x.anzahl : 0;
+    return `<div class="kv"><div class="k">${esc(x.firma)}</div><div class="v">${esc(String(a))}</div></div>`;
+  }).join("");
+
+  listEl.innerHTML = `<div class="detail-grid">${rows}</div>`;
 }
 
 /* =========================
@@ -1203,6 +1275,7 @@ function updateCustomerKpi(c){
     document.getElementById("kpiCount").textContent = "—";
     document.getElementById("kpiRoute").textContent = "—";
     document.getElementById("kpiQty").textContent = "Menge: —";
+    document.getElementById("ordersBox").style.display = "none";
     return;
   }
   document.getElementById("kpiCustomer").textContent = c.name || "—";
@@ -1216,6 +1289,15 @@ function updateCustomerKpi(c){
 function isYes(v){
   const s = String(v ?? "").trim().toLowerCase();
   return s === "ja" || s === "yes" || s === "y" || s === "1" || s === "true" || s === "ok";
+}
+
+function normText(s){
+  return String(s||"")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g," ")
+    .replace(/[.,;:_/\\|()\-–—]/g,"")
+    .replace(/ä/g,"ae").replace(/ö/g,"oe").replace(/ü/g,"ue").replace(/ß/g,"ss");
 }
 
 function getStandFromRow(r){
@@ -1241,10 +1323,15 @@ function getStandFromRow(r){
   return "";
 }
 
+function toInt(v){
+  const n = parseInt(String(v ?? "").trim(), 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function toNum(v){
   if(v===null || v===undefined) return NaN;
   if(typeof v==="number") return v;
-  const s = String(v).trim().replace(",", ".").replace("€","").trim();
+  const s = String(v).trim().replace(/\./g,"").replace(",", ".").replace("€","").trim();
   const n = parseFloat(s);
   return Number.isFinite(n) ? n : NaN;
 }
@@ -1288,4 +1375,3 @@ function loadLS(key, fallback){
 </script>
 </body>
 </html>
-```
