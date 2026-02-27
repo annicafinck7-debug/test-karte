@@ -216,25 +216,6 @@
       background:var(--ui-bg) !important;
       border:1px solid var(--ui-border) !important;
     }
-
-    .legend{
-      position:absolute;
-      right:12px;
-      bottom:12px;
-      z-index:2600;
-      padding:10px 12px;
-      border-radius:14px;
-      border:1px solid var(--ui-border);
-      background:var(--ui-bg);
-      box-shadow:var(--ui-shadow);
-      font:13px/1.2 system-ui, Arial;
-      color:var(--ui-text);
-      user-select:none;
-      min-width:180px;
-    }
-    .legend .t{font-weight:900;margin-bottom:8px}
-    .legend .r{display:flex;align-items:center;gap:8px;margin:6px 0}
-    .sw{width:12px;height:12px;border-radius:4px;border:1px solid rgba(0,0,0,.18)}
   </style>
 </head>
 
@@ -284,7 +265,6 @@
 
   <div class="field w140">
     <label>Fracht €/km</label>
-    <!-- Tipp: Wenn du "1,85" eingeben willst, nutze type="text". Die Formel funktioniert trotzdem -->
     <input id="freightPerKm" type="number" step="0.01" value="1.85">
   </div>
 
@@ -336,7 +316,6 @@
       </div>
     </div>
 
-    <!-- ✅ AUFTRÄGE-BOX -->
     <div class="detail" id="ordersBox" style="display:none">
       <div class="title" id="ordersTitle">Aufträge</div>
       <div id="ordersList" class="small"></div>
@@ -354,7 +333,6 @@
     <div id="results"></div>
   </div>
 </div>
-
 <script>
 /* =========================
    SHEETS
@@ -636,7 +614,7 @@ async function geocodeAll(){
 }
 
 /* =========================
-   Markers
+   Markers + Farb-Logik
    ========================= */
 function customerTriangleIcon(){
   return L.divIcon({ html:`<div class="tri"></div>`, className:"", iconSize:[20,18], iconAnchor:[10,18] });
@@ -646,29 +624,44 @@ function firmColorByProduct(product){
   const scheme = document.getElementById("colorScheme")?.value || "standard";
 
   const palettes = {
-    standard: {
-      lose: "#2563eb",        // Blau
-      sackware: "#f59e0b",    // Orange
-      industrieware: "#16a34a"// Grün
-    },
+    standard: { lose:"#2563eb", sackware:"#f59e0b", industrieware:"#16a34a" },
 
-    pink: {
-      lose: "#e11d48",        // Starkes Pink
-      sackware: "#ec4899",    // Pink
-      industrieware: "#f9a8d4"// Pastell Pink
-    },
+    // ✅ Pink: Lose = stark, Sackware = normal, Industrie = pastell
+    pink:     { lose:"#e11d48", sackware:"#ec4899", industrieware:"#f9a8d4" },
 
-    pastel: {
-      lose: "#93c5fd",
-      sackware: "#fdba74",
-      industrieware: "#86efac"
-    }
+    pastel:   { lose:"#93c5fd", sackware:"#fdba74", industrieware:"#86efac" }
   };
 
   return palettes[scheme]?.[product] || "#2563eb";
 }
-  
-function firmFillColor(f, inputs){ return firmColorByProduct(inputs.product); }
+
+/* ✅ Produkt-Verfügbarkeit (Preis > 0 oder Override) */
+function getEffectiveBase(f, product){
+  const override = priceOverrides?.[f.id]?.[product];
+  return isFinite(override) ? override : f.base?.[product];
+}
+function firmHasProduct(f, product){
+  const base = getEffectiveBase(f, product);
+  return isFinite(base) && base > 0;
+}
+
+/* ✅ “Eigene Farbe” der Firma (je nachdem was sie hat) */
+function firmPrimaryProduct(f){
+  // Priorität kannst du ändern:
+  if(firmHasProduct(f, "lose")) return "lose";
+  if(firmHasProduct(f, "sackware")) return "sackware";
+  if(firmHasProduct(f, "industrieware")) return "industrieware";
+  return "lose";
+}
+
+/* ✅ Farb-Regel:
+   - hat Firma das ausgewählte Produkt? -> Produktfarbe
+   - sonst -> eigene Farbe behalten
+*/
+function firmFillColor(f, inputs){
+  if(firmHasProduct(f, inputs.product)) return firmColorByProduct(inputs.product);
+  return firmColorByProduct(firmPrimaryProduct(f));
+}
 
 function renderMarkers(){
   customerMarkers.forEach(m=>m.remove());
@@ -708,45 +701,33 @@ function renderMarkers(){
   firms.forEach(f=>{
     if(!isFinite(f.lat)||!isFinite(f.lon)) return;
 
-    const isActive = firmHasProduct(f, inputs.product);
-const fill = firmFillColor(f, inputs);
+    const fill = firmFillColor(f, inputs);
 
-const m = L.circleMarker([f.lat,f.lon], {
-  radius: isActive ? 7 : 6,
-  color: outline,
-  weight: isActive ? 2 : 1,
-  fillColor: fill,
-  fillOpacity: isActive ? 0.95 : 0.25   // ✅ ausgegraut wenn kein Produkt
-}).addTo(map);
+    // ✅ Optional: Firmen die das ausgewählte Produkt haben, bekommen stärkeren Rand (kein Grau!)
+    const active = firmHasProduct(f, inputs.product);
+
+    const standTxt = f.stand ? ` (${f.stand})` : "";
+    const sackInfoTxt = f.sackInfo ? ` · Info: ${f.sackInfo}` : "";
+
+    const m = L.circleMarker([f.lat,f.lon], {
+      radius: active ? 7.5 : 7,
+      color: outline,
+      weight: active ? 3 : 2,
+      fillColor: fill,
+      fillOpacity: .95
+    }).addTo(map);
 
     m.bindTooltip(
       `<b>${esc(f.name)}</b><br>${esc(f.address)}<br><span class="small">Stand${esc(standTxt)}${esc(sackInfoTxt)}</span>`,
       {direction:"top"}
     );
 
-    m.on("mouseover", ()=>m.setStyle({radius:9, weight:3, fillOpacity:1}));
-    m.on("mouseout", ()=>m.setStyle({radius:7, weight:2, fillOpacity:.9}));
+    m.on("mouseover", ()=>m.setStyle({radius:9, weight: active ? 4 : 3, fillOpacity:1}));
+    m.on("mouseout",  ()=>m.setStyle({radius:active?7.5:7, weight:active?3:2, fillOpacity:.95}));
 
     m.on("contextmenu", (e)=>openRightClickPricePopup(f, e.latlng));
     firmMarkers.push(m);
   });
-
-}
-function getEffectiveBase(f, product){
-  const override = priceOverrides?.[f.id]?.[product];
-  const base = isFinite(override) ? override : f.base?.[product];
-  return base;
-}
-
-function firmHasProduct(f, product){
-  const base = getEffectiveBase(f, product);
-  return isFinite(base) && base > 0;
-}
-
-function firmFillColor(f, inputs){
-  // ✅ nur Firmen mit diesem Produkt bekommen die Farbe
-  if(!firmHasProduct(f, inputs.product)) return "#9ca3af"; // grau
-  return firmColorByProduct(inputs.product);
 }
 /* =========================
    UI + Autocomplete
@@ -975,11 +956,10 @@ function calculate(){
     const kmAir = haversineKm(selectedCustomer.lat, selectedCustomer.lon, f.lat, f.lon);
     if(kmAir > radiusKm) continue;
 
-    const override = priceOverrides?.[f.id]?.[product];
-    const base = isFinite(override) ? override : f.base[product];
+    const base = getEffectiveBase(f, product);
     if(!isFinite(base) || base <= 0) continue;
 
-    // ✅ Pellet-Formel: Fracht €/t aus km, €/km, Menge, Faktor
+    // ✅ Pellet-Formel
     const freightPerT = (kmAir * freightPerKm / qtyT) * factor;
     const deliveredPerT = base + freightPerT;
     const deliveredTotal = deliveredPerT * qtyT;
@@ -1004,7 +984,6 @@ function calculate(){
     }
   }
   updateMiniKpis(counts);
-
   renderMarkers();
 
   if(!results.length){
@@ -1158,8 +1137,7 @@ function hideDetail(){
    ========================= */
 function openRightClickPricePopup(firm, latlng){
   const product = document.getElementById("product").value;
-  const currentOverride = priceOverrides?.[firm.id]?.[product];
-  const current = isFinite(currentOverride) ? currentOverride : firm.base[product];
+  const current = getEffectiveBase(firm, product);
 
   const div = document.createElement("div");
   div.className="rcard";
@@ -1343,7 +1321,7 @@ function toInt(v){
   return Number.isFinite(n) ? n : 0;
 }
 
-/* ✅ FIX: Zahl parsing (1.85 UND 1,85 UND 1.234,56) */
+/* ✅ Zahl parsing (1.85 UND 1,85 UND 1.234,56) */
 function toNum(v){
   if(v===null || v===undefined) return NaN;
   if(typeof v==="number") return v;
@@ -1357,13 +1335,10 @@ function toNum(v){
   const hasDot   = s.includes(".");
 
   if(hasComma && hasDot){
-    // "1.234,56" -> "1234.56"
     s = s.replace(/\./g, "").replace(",", ".");
   }else if(hasComma && !hasDot){
-    // "1234,56" -> "1234.56"
     s = s.replace(",", ".");
   }else{
-    // "1234.56" bleibt, "1,234.56" -> Kommas raus
     s = s.replace(/,/g, "");
   }
 
