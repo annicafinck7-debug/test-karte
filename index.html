@@ -230,13 +230,41 @@
     <input id="custSearch" placeholder="Name / Ort …">
   </div>
 
+  <!-- ✅ Produkt für Berechnung (Formel) -->
   <div class="field w140">
-    <label>Produkt</label>
-    <select id="product">
+    <label>Produkt (Berechnung)</label>
+    <select id="productCalc">
       <option value="lose">Lose</option>
       <option value="sackware">Sackware</option>
       <option value="industrieware">Industrieware</option>
     </select>
+  </div>
+
+  <!-- ✅ Produkte für Farben (an/aus) -->
+  <div class="field w140" style="position:relative">
+    <label>Produkte (Farben an/aus)</label>
+    <button class="btn" id="prodBtn" type="button">Produkte ▾</button>
+
+    <div id="prodMenu" style="
+      position:absolute; top:54px; left:0;
+      background:var(--ui-bg);
+      border:1px solid var(--ui-border);
+      box-shadow:var(--ui-shadow);
+      border-radius:12px;
+      padding:10px;
+      min-width:220px;
+      display:none;
+      z-index:5000;
+    ">
+      <div class="small" style="margin-bottom:6px;">Basis bleibt Lose-Farbe. Sack/Industrie färben nur passende Firmen um.</div>
+
+      <label style="display:flex;gap:8px;align-items:center;margin:6px 0;">
+        <input type="checkbox" id="pSack"> Sackware (Highlight)
+      </label>
+      <label style="display:flex;gap:8px;align-items:center;margin:6px 0;">
+        <input type="checkbox" id="pInd"> Industrieware (Highlight)
+      </label>
+    </div>
   </div>
 
   <div class="field w140">
@@ -614,7 +642,7 @@ async function geocodeAll(){
 }
 
 /* =========================
-   Markers + Farb-Logik
+   Markers + Farben
    ========================= */
 function customerTriangleIcon(){
   return L.divIcon({ html:`<div class="tri"></div>`, className:"", iconSize:[20,18], iconAnchor:[10,18] });
@@ -622,20 +650,15 @@ function customerTriangleIcon(){
 
 function firmColorByProduct(product){
   const scheme = document.getElementById("colorScheme")?.value || "standard";
-
   const palettes = {
     standard: { lose:"#2563eb", sackware:"#f59e0b", industrieware:"#16a34a" },
-
-    // ✅ Pink: Lose = stark, Sackware = normal, Industrie = pastell
+    // ✅ Pink genau wie du gesagt hast:
     pink:     { lose:"#e11d48", sackware:"#ec4899", industrieware:"#f9a8d4" },
-
     pastel:   { lose:"#93c5fd", sackware:"#fdba74", industrieware:"#86efac" }
   };
-
   return palettes[scheme]?.[product] || "#2563eb";
 }
 
-/* ✅ Produkt-Verfügbarkeit (Preis > 0 oder Override) */
 function getEffectiveBase(f, product){
   const override = priceOverrides?.[f.id]?.[product];
   return isFinite(override) ? override : f.base?.[product];
@@ -645,22 +668,19 @@ function firmHasProduct(f, product){
   return isFinite(base) && base > 0;
 }
 
-/* ✅ “Eigene Farbe” der Firma (je nachdem was sie hat) */
-function firmPrimaryProduct(f){
-  // Priorität kannst du ändern:
-  if(firmHasProduct(f, "lose")) return "lose";
-  if(firmHasProduct(f, "sackware")) return "sackware";
-  if(firmHasProduct(f, "industrieware")) return "industrieware";
-  return "lose";
-}
-
-/* ✅ Farb-Regel:
-   - hat Firma das ausgewählte Produkt? -> Produktfarbe
-   - sonst -> eigene Farbe behalten
+/* ✅ WICHTIG:
+   Basisfarbe ist IMMER Lose-Farbe.
+   Wenn Sackware Highlight aktiv + Firma hat Sackware -> Sackware-Farbe.
+   Wenn Industrieware Highlight aktiv + Firma hat Industrieware -> Industrie-Farbe.
+   (Priorität: Sackware > Industrie, damit’s logisch bleibt.)
 */
 function firmFillColor(f, inputs){
-  if(firmHasProduct(f, inputs.product)) return firmColorByProduct(inputs.product);
-  return firmColorByProduct(firmPrimaryProduct(f));
+  const baseColor = firmColorByProduct("lose");
+
+  if(inputs.showSack && firmHasProduct(f, "sackware")) return firmColorByProduct("sackware");
+  if(inputs.showInd  && firmHasProduct(f, "industrieware")) return firmColorByProduct("industrieware");
+
+  return baseColor;
 }
 
 function renderMarkers(){
@@ -703,16 +723,14 @@ function renderMarkers(){
 
     const fill = firmFillColor(f, inputs);
 
-    // ✅ Optional: Firmen die das ausgewählte Produkt haben, bekommen stärkeren Rand (kein Grau!)
-    const active = firmHasProduct(f, inputs.product);
-
     const standTxt = f.stand ? ` (${f.stand})` : "";
     const sackInfoTxt = f.sackInfo ? ` · Info: ${f.sackInfo}` : "";
 
+    // ✅ ALLE GLEICH GROSS
     const m = L.circleMarker([f.lat,f.lon], {
-      radius: active ? 7.5 : 7,
+      radius: 7,
       color: outline,
-      weight: active ? 3 : 2,
+      weight: 2,
       fillColor: fill,
       fillOpacity: .95
     }).addTo(map);
@@ -722,8 +740,8 @@ function renderMarkers(){
       {direction:"top"}
     );
 
-    m.on("mouseover", ()=>m.setStyle({radius:9, weight: active ? 4 : 3, fillOpacity:1}));
-    m.on("mouseout",  ()=>m.setStyle({radius:active?7.5:7, weight:active?3:2, fillOpacity:.95}));
+    m.on("mouseover", ()=>m.setStyle({radius:9, weight:3, fillOpacity:1}));
+    m.on("mouseout",  ()=>m.setStyle({radius:7, weight:2, fillOpacity:.95}));
 
     m.on("contextmenu", (e)=>openRightClickPricePopup(f, e.latlng));
     firmMarkers.push(m);
@@ -743,9 +761,30 @@ function initUI(){
     if(selectedCustomer) calculate();
   });
 
-  document.getElementById("product").addEventListener("change", ()=>{
-    renderMarkers();
+  // ✅ Produkt für Berechnung
+  document.getElementById("productCalc").addEventListener("change", ()=>{
     if(selectedCustomer) calculate();
+  });
+
+  // ✅ Produkte-Menü (an/aus)
+  const prodBtn  = document.getElementById("prodBtn");
+  const prodMenu = document.getElementById("prodMenu");
+
+  prodBtn.addEventListener("click", (e)=>{
+    e.stopPropagation();
+    prodMenu.style.display = (prodMenu.style.display === "block") ? "none" : "block";
+  });
+
+  document.addEventListener("click", ()=>{
+    prodMenu.style.display = "none";
+  });
+
+  ["pSack","pInd"].forEach(id=>{
+    const el = document.getElementById(id);
+    el.addEventListener("change", ()=>{
+      renderMarkers();
+      if(selectedCustomer) calculate();
+    });
   });
 
   const schemeSel = document.getElementById("colorScheme");
@@ -907,7 +946,13 @@ function renderOrdersForCustomer(c){
 function getInputs(){
   const factor = toNum(document.getElementById("factor").value);
   return {
-    product: document.getElementById("product").value,
+    // ✅ Produkt für Berechnung
+    product: document.getElementById("productCalc").value,
+
+    // ✅ Farben an/aus
+    showSack: document.getElementById("pSack")?.checked ?? false,
+    showInd:  document.getElementById("pInd")?.checked ?? false,
+
     radiusKm: toNum(document.getElementById("radiusKm").value) || 250,
     qtyT: Math.max(0.1, toNum(document.getElementById("qtyT").value) || 24),
     freightPerKm: toNum(document.getElementById("freightPerKm").value) || 1.85,
@@ -942,7 +987,6 @@ function calculate(){
     </div>`;
     document.getElementById("kpiCount").textContent = "0";
     updateMiniKpis({good:0, mid:0, bad:0});
-    renderMarkers();
     return;
   }
 
@@ -984,7 +1028,6 @@ function calculate(){
     }
   }
   updateMiniKpis(counts);
-  renderMarkers();
 
   if(!results.length){
     out.innerHTML = `<div class="small">Keine Firmen im Radius / mit gültigem Preis gefunden.</div>`;
@@ -1136,7 +1179,7 @@ function hideDetail(){
    Right click price edit
    ========================= */
 function openRightClickPricePopup(firm, latlng){
-  const product = document.getElementById("product").value;
+  const product = document.getElementById("productCalc").value;
   const current = getEffectiveBase(firm, product);
 
   const div = document.createElement("div");
@@ -1321,7 +1364,6 @@ function toInt(v){
   return Number.isFinite(n) ? n : 0;
 }
 
-/* ✅ Zahl parsing (1.85 UND 1,85 UND 1.234,56) */
 function toNum(v){
   if(v===null || v===undefined) return NaN;
   if(typeof v==="number") return v;
@@ -1383,6 +1425,13 @@ function loadLS(key, fallback){
     return s ? JSON.parse(s) : fallback;
   }catch(e){ return fallback; }
 }
+
+/* ✅ Mini KPI */
+function updateMiniKpis({good, mid, bad}){
+  document.getElementById("miniGood").textContent = String(good ?? 0);
+  document.getElementById("miniMid").textContent  = String(mid ?? 0);
+  document.getElementById("miniBad").textContent  = String(bad ?? 0);
+}
 </script>
 </body>
-</html>
+</html>  
