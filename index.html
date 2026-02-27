@@ -8,10 +8,6 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <!-- ✅ Leaflet Draw (Zonen zeichnen) -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
-  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
-
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
   <style>
@@ -80,8 +76,6 @@
     .field input::placeholder{color:var(--inp-ph)}
     .field input:focus,.field select:focus{border-color:var(--inp-focus); box-shadow:0 0 0 3px rgba(37,99,235,.12)}
     .w240{min-width:240px}
-    .w200{min-width:200px}
-    .w170{min-width:170px}
     .w140{min-width:140px}
     .w110{min-width:110px}
 
@@ -201,7 +195,7 @@
 
     .rcard{font:14px/1.25 system-ui, Arial; padding:8px; min-width:300px;}
     .rcard .h{font-weight:900;margin-bottom:6px}
-    .rcard .r{display:flex; gap:8px; align-items:center; margin-top:6px}
+    .rcard .row2{display:grid; grid-template-columns:1fr; gap:8px; margin-top:8px;}
     .rcard input, .rcard textarea{
       width:100%;
       padding:9px 10px;
@@ -214,7 +208,6 @@
     }
     .rcard textarea{min-height:84px; resize:vertical;}
     .rcard .note{font-size:12px; color:var(--ui-muted); margin-top:6px}
-    .rcard .row2{display:grid; grid-template-columns:1fr; gap:8px; margin-top:8px;}
 
     .tri{
       width:0;height:0;
@@ -243,13 +236,6 @@
     <input id="custSearch" placeholder="Name / Ort …">
   </div>
 
-  <!-- ✅ NEU: PLZ/Ort springen -->
-  <div class="field w200">
-    <label>PLZ / Ort springen</label>
-    <input id="placeSearch" placeholder="z.B. 18055 oder Rostock">
-  </div>
-  <button class="btn" id="btnPlace">Springen</button>
-
   <div class="field w140">
     <label>Produkt</label>
     <select id="product">
@@ -266,12 +252,6 @@
       <option value="pink">Pink</option>
       <option value="pastel">Pastell</option>
     </select>
-  </div>
-
-  <!-- ✅ NEU: Zonen-Hinweis -->
-  <div class="field w170">
-    <label>Zonen</label>
-    <button class="btn" id="btnZones" title="Zonen zeichnen/bearbeiten">✏️ Zeichnen</button>
   </div>
 
   <div class="field w110">
@@ -379,10 +359,8 @@ const LS_PANEL_POS_KEY = "salesMap_panelPos_v11";
 const LS_COLOR_SCHEME_KEY = "salesMap_colorScheme_v6";
 const LS_THEME_KEY = "salesMap_theme_v5";
 
-/* ✅ NEU */
-const LS_ZONES_KEY = "salesMap_zones_v1";
+/* ✅ Notizen */
 const LS_NOTES_KEY = "salesMap_notes_v1";
-const LS_PLACE_CACHE_KEY = "salesMap_placeCache_v1";
 
 /* =========================
    State
@@ -399,13 +377,7 @@ let deliveriesByCustomer = new Map();
 
 let geoCache = loadLS(LS_GEO_CACHE_KEY, {});
 let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
-let notesStore = loadLS(LS_NOTES_KEY, {});            // { "F0": "text", "C3": "text" }
-let placeCache = loadLS(LS_PLACE_CACHE_KEY, {});     // { "rostock": {lat,lon,ts} }
-
-/* ✅ Zonen */
-let zonesLayer = L.featureGroup();
-let drawControl = null;
-let drawEnabled = false;
+let notesStore = loadLS(LS_NOTES_KEY, {}); // { "F0": "...", "C3": "..." }
 
 /* =========================
    Init
@@ -421,10 +393,6 @@ async function init(){
     maxZoom: 19,
     attribution: "&copy; OpenStreetMap contributors"
   }).addTo(map);
-
-  // Zonen Layer
-  zonesLayer.addTo(map);
-  initZones();
 
   setTimeout(()=>map.invalidateSize(), 80);
 
@@ -443,137 +411,6 @@ async function init(){
   updateCustomerKpi(null);
   updateLoadStatusCounts();
   updateMiniKpis({good:0, mid:0, bad:0});
-}
-
-/* =========================
-   ZONEN (Leaflet Draw)
-   ========================= */
-function initZones(){
-  // Restore from LS
-  const stored = loadLS(LS_ZONES_KEY, null);
-  if(stored && stored.type === "FeatureCollection"){
-    try{
-      const gj = L.geoJSON(stored, {
-        style: { weight:2, fillOpacity:0.10 },
-        onEachFeature: (feature, layer)=>{
-          const name = feature?.properties?.name || "Zone";
-          layer.bindTooltip(`<b>${esc(name)}</b>`, {sticky:true});
-        }
-      });
-      gj.eachLayer(l=>zonesLayer.addLayer(l));
-    }catch(e){}
-  }
-
-  // Draw control (hidden until toggle)
-  drawControl = new L.Control.Draw({
-    position: "topleft",
-    draw: {
-      polyline: false,
-      circle: false,
-      circlemarker: false,
-      marker: false,
-      polygon: { allowIntersection:false, showArea:true },
-      rectangle: { showArea:true }
-    },
-    edit: {
-      featureGroup: zonesLayer,
-      remove: true
-    }
-  });
-
-  // Events
-  map.on(L.Draw.Event.CREATED, (e)=>{
-    const layer = e.layer;
-    const defaultName = "Zone " + (zonesLayer.getLayers().length + 1);
-    const name = prompt("Zonen-Name:", defaultName) || defaultName;
-    layer.feature = layer.feature || { type:"Feature", properties:{} };
-    layer.feature.properties = layer.feature.properties || {};
-    layer.feature.properties.name = name;
-
-    layer.bindTooltip(`<b>${esc(name)}</b>`, {sticky:true});
-    zonesLayer.addLayer(layer);
-    saveZonesToLS();
-    // optional: sofort neu rendern (Zone-Label in Tooltips)
-    renderMarkers();
-  });
-
-  map.on(L.Draw.Event.EDITED, ()=>{
-    saveZonesToLS();
-    renderMarkers();
-  });
-
-  map.on(L.Draw.Event.DELETED, ()=>{
-    saveZonesToLS();
-    renderMarkers();
-  });
-}
-
-function toggleZones(){
-  drawEnabled = !drawEnabled;
-  if(drawEnabled){
-    map.addControl(drawControl);
-  }else{
-    try{ map.removeControl(drawControl); }catch(e){}
-  }
-}
-
-function saveZonesToLS(){
-  try{
-    const geo = zonesLayer.toGeoJSON();
-    saveLS(LS_ZONES_KEY, geo);
-  }catch(e){}
-}
-
-function getZoneNameForLatLng(lat, lon){
-  // returns first matching zone name or ""
-  const fc = zonesLayer.toGeoJSON();
-  if(!fc || !Array.isArray(fc.features)) return "";
-  for(const f of fc.features){
-    const name = f?.properties?.name || "Zone";
-    if(pointInGeoJSONPolygon(lat, lon, f)) return name;
-  }
-  return "";
-}
-
-/* Ray casting: supports Polygon / MultiPolygon */
-function pointInGeoJSONPolygon(lat, lon, feature){
-  const geom = feature?.geometry;
-  if(!geom) return false;
-
-  if(geom.type === "Polygon"){
-    return pointInPolygonRings(lat, lon, geom.coordinates);
-  }
-  if(geom.type === "MultiPolygon"){
-    for(const poly of geom.coordinates){
-      if(pointInPolygonRings(lat, lon, poly)) return true;
-    }
-  }
-  return false;
-}
-
-function pointInPolygonRings(lat, lon, rings){
-  // rings: [outerRing, hole1, hole2...], each ring: [ [lng,lat], ... ]
-  if(!rings || !rings.length) return false;
-  const outer = rings[0];
-  if(!pointInRing(lat, lon, outer)) return false;
-  // holes: if inside hole => false
-  for(let i=1;i<rings.length;i++){
-    if(pointInRing(lat, lon, rings[i])) return false;
-  }
-  return true;
-}
-
-function pointInRing(lat, lon, ring){
-  let inside = false;
-  for(let i=0, j=ring.length-1; i<ring.length; j=i++){
-    const xi = ring[i][0], yi = ring[i][1];
-    const xj = ring[j][0], yj = ring[j][1];
-    const intersect =
-      ((yi > lat) !== (yj > lat)) &&
-      (lon < (xj - xi) * (lat - yi) / ((yj - yi) || 1e-12) + xi);
-    if(intersect) inside = !inside;
-  }
-  return inside;
 }
 
 /* =========================
@@ -741,33 +578,6 @@ async function geocodeAddress(address){
   return null;
 }
 
-/* ✅ PLZ/ORT springen */
-async function geocodePlace(q){
-  const key = String(q||"").trim().toLowerCase();
-  if(!key) return null;
-
-  const cached = placeCache[key];
-  if(cached && isFinite(cached.lat) && isFinite(cached.lon)){
-    return {lat: cached.lat, lon: cached.lon};
-  }
-
-  const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(q);
-  try{
-    const res = await fetch(url, { headers: { "Accept":"application/json" } });
-    const data = await res.json();
-    if(data && data[0]){
-      const lat = parseFloat(data[0].lat);
-      const lon = parseFloat(data[0].lon);
-      if(isFinite(lat) && isFinite(lon)){
-        placeCache[key] = {lat, lon, ts: Date.now()};
-        saveLS(LS_PLACE_CACHE_KEY, placeCache);
-        return {lat, lon};
-      }
-    }
-  }catch(e){}
-  return null;
-}
-
 function updateLoadStatusCounts(prefix=""){
   const totalC = customers.length;
   const totalF = firms.length;
@@ -838,10 +648,9 @@ function renderMarkers(){
 
   customers.forEach(c=>{
     if(!isFinite(c.lat)||!isFinite(c.lon)) return;
-    const zoneName = getZoneNameForLatLng(c.lat, c.lon);
+
     const note = (notesStore?.[c.id] || "").trim();
     const noteMark = note ? " 📝" : "";
-    const zoneTxt = zoneName ? ` · Zone: ${zoneName}` : "";
 
     const m = L.marker([c.lat,c.lon], {icon: customerTriangleIcon()}).addTo(map);
 
@@ -849,7 +658,7 @@ function renderMarkers(){
       `Lose: ${c.accepts?.lose ? "✓" : "—"} · Sackware: ${c.accepts?.sackware ? "✓" : "—"} · Industrie: ${c.accepts?.industrieware ? "✓" : "—"}`;
 
     m.bindTooltip(
-      `<b>${esc(c.name)}${noteMark}</b><br>${esc(c.address)}<br><span class="small">${esc(accTxt)}${esc(zoneTxt)}</span>`,
+      `<b>${esc(c.name)}${noteMark}</b><br>${esc(c.address)}<br><span class="small">${esc(accTxt)}</span>`,
       {direction:"top"}
     );
 
@@ -858,7 +667,7 @@ function renderMarkers(){
       const html = `
         <div class="rcard">
           <div class="h">${esc(c.name)}${note ? " 📝" : ""}</div>
-          <div class="small">${esc(c.address)}${esc(zoneTxt)}</div>
+          <div class="small">${esc(c.address)}</div>
           <div class="small" style="margin-top:6px;">Annahme: ${esc(accTxt)}</div>
           ${note ? `<div class="small" style="margin-top:8px;"><b>Notiz:</b><br>${esc(note).replace(/\n/g,"<br>")}</div>` : ""}
           <div class="note" style="margin-top:8px;">Rechtsklick auf den Kunden = Notiz bearbeiten</div>
@@ -870,7 +679,6 @@ function renderMarkers(){
         .openOn(map);
     });
 
-    // ✅ NEU: Kunden-Notiz per Rechtsklick
     m.on("contextmenu", (e)=>openNotePopupForCustomer(c, e.latlng));
 
     customerMarkers.push(m);
@@ -886,9 +694,6 @@ function renderMarkers(){
     const standTxt = f.stand ? ` (${f.stand})` : "";
     const sackInfoTxt = f.sackInfo ? ` · Info: ${f.sackInfo}` : "";
 
-    const zoneName = getZoneNameForLatLng(f.lat, f.lon);
-    const zoneTxt = zoneName ? ` · Zone: ${zoneName}` : "";
-
     const note = (notesStore?.[f.id] || "").trim();
     const noteMark = note ? " 📝" : "";
 
@@ -901,14 +706,13 @@ function renderMarkers(){
     }).addTo(map);
 
     m.bindTooltip(
-      `<b>${esc(f.name)}${noteMark}</b><br>${esc(f.address)}<br><span class="small">Stand${esc(standTxt)}${esc(sackInfoTxt)}${esc(zoneTxt)}</span>`,
+      `<b>${esc(f.name)}${noteMark}</b><br>${esc(f.address)}<br><span class="small">Stand${esc(standTxt)}${esc(sackInfoTxt)}</span>`,
       {direction:"top"}
     );
 
     m.on("mouseover", ()=>m.setStyle({radius:9, weight:3, fillOpacity:1}));
     m.on("mouseout", ()=>m.setStyle({radius:7, weight:2, fillOpacity:.9}));
 
-    // ✅ NEU: Rechtsklick = Preis + Notiz zusammen
     m.on("contextmenu", (e)=>openFirmPriceAndNotePopup(f, e.latlng));
 
     firmMarkers.push(m);
@@ -991,7 +795,6 @@ function openFirmPriceAndNotePopup(firm, latlng){
     const inp = div.querySelector("#priceInput");
     const ta  = div.querySelector("#noteTxt");
 
-    // Preis speichern (Enter)
     inp.addEventListener("keydown",(e)=>{
       if(e.key==="Enter"){
         const v = toNum(inp.value);
@@ -1001,7 +804,6 @@ function openFirmPriceAndNotePopup(firm, latlng){
           saveLS(LS_PRICE_OVERRIDES_KEY, priceOverrides);
           renderMarkers();
           calculate();
-          // popup bleibt offen (kannst weiter Notiz tippen)
           setTimeout(()=>ta.focus(), 10);
         }
       }
@@ -1010,7 +812,6 @@ function openFirmPriceAndNotePopup(firm, latlng){
       }
     });
 
-    // Notiz Autosave
     const saveNote = ()=>{
       const v = String(ta.value||"").trim();
       if(v) notesStore[firm.id] = v;
@@ -1024,40 +825,15 @@ function openFirmPriceAndNotePopup(firm, latlng){
     });
     map.on("popupclose", saveNote);
 
-    // Fokus Preis
     inp.focus(); inp.select();
   }, 30);
 }
-   /* =========================
+  /* =========================
    UI + Autocomplete
    ========================= */
 function initUI(){
   document.getElementById("btnGeo").addEventListener("click", geocodeAll);
   document.getElementById("btnCalc").addEventListener("click", calculate);
-
-  // ✅ PLZ/Ort springen
-  document.getElementById("btnPlace").addEventListener("click", async ()=>{
-    const q = document.getElementById("placeSearch").value.trim();
-    if(!q) return;
-    setLoadStatus("Suche Ort/PLZ …");
-    const coords = await geocodePlace(q);
-    if(coords){
-      map.setView([coords.lat, coords.lon], 10, {animate:true});
-      setLoadStatus("✅ Ort gefunden");
-    }else{
-      setLoadStatus("⚠️ Nicht gefunden");
-    }
-    updateLoadStatusCounts();
-  });
-  document.getElementById("placeSearch").addEventListener("keydown", (e)=>{
-    if(e.key==="Enter") document.getElementById("btnPlace").click();
-  });
-
-  // ✅ Zonen toggle
-  document.getElementById("btnZones").addEventListener("click", ()=>{
-    toggleZones();
-    document.getElementById("btnZones").textContent = drawEnabled ? "✅ Aktiv" : "✏️ Zeichnen";
-  });
 
   document.getElementById("btnTheme").addEventListener("click", ()=>{
     document.body.classList.toggle("dark");
@@ -1283,7 +1059,6 @@ function calculate(){
     const base = isFinite(override) ? override : f.base[product];
     if(!isFinite(base) || base <= 0) continue;
 
-    // ✅ Pellet-Formel
     const freightPerT = (kmAir * freightPerKm / qtyT) * factor;
     const deliveredPerT = base + freightPerT;
     const deliveredTotal = deliveredPerT * qtyT;
@@ -1432,13 +1207,11 @@ function showDetail(row, inputs, routeKm){
   const marginPerT = isFinite(targetVk) ? (targetVk - row.deliveredPerT) : NaN;
   const profitTotal = isFinite(marginPerT) ? (marginPerT * qtyT) : NaN;
 
-  const zoneName = (isFinite(row.f.lat) && isFinite(row.f.lon)) ? getZoneNameForLatLng(row.f.lat, row.f.lon) : "";
   const note = (notesStore?.[row.f.id] || "").trim();
 
   grid.innerHTML = `
     ${kv("Adresse", row.f.address)}
     ${kv("Stand", row.f.stand ? row.f.stand : "—")}
-    ${kv("Zone", zoneName || "—")}
     ${kv("Produkt", productLabel(product))}
     ${kv("Menge", `${fmt(qtyT,1)} t`)}
     ${kv("Route (km)", routeText)}
@@ -1470,20 +1243,15 @@ async function copyOfferText(customer, row, inputs, routeKm){
   const marginPerT = isFinite(targetVk) ? (targetVk - row.deliveredPerT) : NaN;
   const profitTotal = isFinite(marginPerT) ? (marginPerT * qtyT) : NaN;
 
-  const zoneCust = (isFinite(customer.lat)&&isFinite(customer.lon)) ? getZoneNameForLatLng(customer.lat, customer.lon) : "";
-  const zoneFirm = (isFinite(row.f.lat)&&isFinite(row.f.lon)) ? getZoneNameForLatLng(row.f.lat, row.f.lon) : "";
-
   const text =
 `Angebots-Vorschlag
 Kunde: ${customer.name}
 Adresse: ${customer.address}
-Zone: ${zoneCust || "-"}
 Produkt: ${productLabel(product)}
 Menge: ${qtyT} t
 
 Firma: ${row.f.name}
 Adresse: ${row.f.address}
-Zone: ${zoneFirm || "-"}
 Stand: ${row.f.stand || "—"}
 Luftlinie: ${row.kmAir.toFixed(1)} km
 Route: ${routeKm && isFinite(routeKm) ? routeKm.toFixed(1) : "—"} km
@@ -1563,9 +1331,8 @@ function updateCustomerKpi(c){
     document.getElementById("ordersBox").style.display = "none";
     return;
   }
-  const zoneName = (isFinite(c.lat)&&isFinite(c.lon)) ? getZoneNameForLatLng(c.lat, c.lon) : "";
   document.getElementById("kpiCustomer").textContent = c.name || "—";
-  document.getElementById("kpiCustomerAddr").textContent = (c.address || "—") + (zoneName ? ` · Zone: ${zoneName}` : "");
+  document.getElementById("kpiCustomerAddr").textContent = c.address || "—";
   document.getElementById("kpiRoute").textContent = "—";
 }
 
