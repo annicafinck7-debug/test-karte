@@ -222,7 +222,7 @@
       border:1px solid var(--ui-border) !important;
     }
 
-    /* ✅ Missing Panel */
+    /* Missing Panel */
     .missPanel{
       position:absolute; right:12px; top:56px; z-index:6000;
       width:440px; max-height:70vh; overflow:hidden;
@@ -394,7 +394,20 @@
 </div>
 <script>
 /* =========================
-   SHEETS
+   ✅ LocalStorage (MUSS GANZ OBEN STEHEN)
+   ========================= */
+function saveLS(key, obj){
+  try{ localStorage.setItem(key, JSON.stringify(obj)); }catch(e){}
+}
+function loadLS(key, fallback){
+  try{
+    const s = localStorage.getItem(key);
+    return s ? JSON.parse(s) : fallback;
+  }catch(e){ return fallback; }
+}
+
+/* =========================
+   CONFIG
    ========================= */
 const CONFIG = {
   firmsCsvUrl: "https://docs.google.com/spreadsheets/d/1f1oD1TlYWPRbD12d05yIGkqmXVygVt3ZHLk9U0bKoTs/gviz/tq?tqx=out:csv&gid=0",
@@ -482,11 +495,11 @@ let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
 let notesStore = loadLS(LS_NOTES_KEY, {});
 
 /* =========================
-   Init
+   INIT
    ========================= */
 window.addEventListener("load", ()=>init().catch(err=>{
   console.error("INIT ERROR:", err);
-  alert("Fehler beim Laden der Karte. Öffne F12 → Konsole, da steht der Grund.");
+  alert("Fehler beim Laden der Karte. Öffne F12 → Konsole für Details.");
 }));
 
 async function init(){
@@ -512,7 +525,7 @@ async function init(){
 
   setLoadStatus("Lade Tabellen …");
 
-  // ✅ WICHTIG: erst Kunden + Firmen, dann Aufträge (sonst kann’s crashen / falsch matchen)
+  // ✅ WICHTIG: erst Kunden + Firmen, dann Aufträge (stabil)
   await loadCustomers();
   await loadFirms();
   await loadDeliveries();
@@ -546,7 +559,7 @@ function initMissingUI(){
 }
 
 /* =========================
-   CSV (robust)
+   CSV Parsing (robust)
    ========================= */
 function parseCsv(url){
   return new Promise((resolve, reject)=>{
@@ -663,7 +676,6 @@ async function loadDeliveries(){
       return { kunde, firma, anzahl, _row: idx+2 };
     }).filter(x => x.kunde && x.firma);
 
-    // Missing auftraege neu
     missing.auftraege = [];
 
     const custSet = new Set(customers.map(c => normText(c.name)));
@@ -742,8 +754,6 @@ async function geocodeAddress(address){
 }
 
 function rebuildMissingNoCoords(){
-  // Kunden/Firmen ohne coords in Missing hinzufügen (ohne die “Keine Adresse”-Einträge zu zerstören)
-  // -> wir entfernen alte “Keine Koordinaten…” Einträge und bauen neu.
   missing.kunden = missing.kunden.filter(x => x.reason === "Keine Adresse");
   missing.firmen = missing.firmen.filter(x => x.reason === "Keine Adresse");
 
@@ -894,14 +904,13 @@ function renderMarkers(){
 
     m.on("mouseover", ()=>m.setStyle({radius:9, weight:3, fillOpacity:1}));
     m.on("mouseout", ()=>m.setStyle({radius:7, weight:2, fillOpacity:.9}));
-    m.on("contextmenu", (e)=>openFirmPriceAndNotePopup(f, e.latlng));
 
+    m.on("contextmenu", (e)=>openFirmPriceAndNotePopup(f, e.latlng));
     firmMarkers.push(m);
   });
 
-  updateLoadStatusCounts(); // ✅ Status immer korrekt halten
+  updateLoadStatusCounts();
 }
-</script>
 <script>
 /* =========================
    Notizen Popups
@@ -945,8 +954,10 @@ function openNotePopupForCustomer(cust, latlng){
 
 function openFirmPriceAndNotePopup(firm, latlng){
   const product = document.getElementById("product").value;
+
   const currentOverride = priceOverrides?.[firm.id]?.[product];
   const currentPrice = isFinite(currentOverride) ? currentOverride : firm.base[product];
+
   const currentNote = (notesStore?.[firm.id] || "").trim();
 
   const div = document.createElement("div");
@@ -1138,6 +1149,7 @@ function selectCustomer(c){
   }
   document.getElementById("panel").classList.remove("hidden");
   setTimeout(()=>map.invalidateSize(), 50);
+
   renderMarkers();
 }
 
@@ -1258,6 +1270,7 @@ function calculate(){
     }
   }
   updateMiniKpis(counts);
+
   renderMarkers();
 
   if(!results.length){
@@ -1294,13 +1307,16 @@ function calculate(){
       </td>
       <td>${makeBadge(row, targetVk)}</td>
     `;
+
     tr.addEventListener("click", async ()=>{
       const routeKm = await drawRouteOSRM(selectedCustomer, row.f);
       showDetail(row, inputs, routeKm);
       await copyOfferText(selectedCustomer, row, inputs, routeKm);
     });
+
     tbody.appendChild(tr);
   }
+
   out.appendChild(table);
 }
 
@@ -1320,7 +1336,7 @@ function makeBadge(row, targetVk){
 }
 
 /* =========================
-   Routing + Detail + Copy
+   Routing
    ========================= */
 function clearRoute(){
   if(routeLayer){
@@ -1356,10 +1372,12 @@ async function drawRouteOSRM(from, to){
   return null;
 }
 
+/* =========================
+   Detail
+   ========================= */
 function kv(k, v){
   return `<div class="kv"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`;
 }
-
 function showDetail(row, inputs, routeKm){
   const {product, qtyT, freightPerKm, factor, targetVk} = inputs;
 
@@ -1403,6 +1421,9 @@ function hideDetail(){
   document.getElementById("detailTitle").textContent="Details";
 }
 
+/* =========================
+   Offer copy
+   ========================= */
 async function copyOfferText(customer, row, inputs, routeKm){
   const {product, qtyT, freightPerKm, factor, targetVk} = inputs;
   const marginPerT = isFinite(targetVk) ? (targetVk - row.deliveredPerT) : NaN;
@@ -1445,7 +1466,7 @@ Fracht €/km: ${freightPerKm} | Faktor: ${factor}`;
 }
 
 /* =========================
-   Panel drag + persist
+   Panel drag
    ========================= */
 function initPanelDrag(){
   const panel = document.getElementById("panel");
@@ -1484,7 +1505,7 @@ function initPanelDrag(){
 }
 
 /* =========================
-   KPI updates
+   KPI
    ========================= */
 function updateCustomerKpi(c){
   if(!c){
@@ -1508,7 +1529,6 @@ function isYes(v){
   const s = String(v ?? "").trim().toLowerCase();
   return s === "ja" || s === "yes" || s === "y" || s === "1" || s === "true" || s === "ok";
 }
-
 function normText(s){
   return String(s||"")
     .trim()
@@ -1517,35 +1537,19 @@ function normText(s){
     .replace(/[.,;:_/\\|()\-–—]/g,"")
     .replace(/ä/g,"ae").replace(/ö/g,"oe").replace(/ü/g,"ue").replace(/ß/g,"ss");
 }
-
 function getStandFromRow(r){
   const direct = str(r["stand"]).trim();
   if(direct) return direct;
-
-  if(Object.prototype.hasOwnProperty.call(r, "")){
-    const v = str(r[""]).trim();
-    if(v) return v;
-  }
-
   if(Array.isArray(r["__parsed_extra"]) && r["__parsed_extra"].length){
     const v = str(r["__parsed_extra"][0]).trim();
     if(v) return v;
   }
-
-  for(const k of Object.keys(r)){
-    if(String(k).trim()===""){
-      const v = str(r[k]).trim();
-      if(v) return v;
-    }
-  }
   return "";
 }
-
 function toInt(v){
   const n = parseInt(String(v ?? "").trim(), 10);
   return Number.isFinite(n) ? n : 0;
 }
-
 function toNum(v){
   if(v===null || v===undefined) return NaN;
   if(typeof v==="number") return v;
@@ -1554,10 +1558,8 @@ function toNum(v){
   if(!s) return NaN;
 
   s = s.replace(/[€\s]/g, "");
-
   const hasComma = s.includes(",");
   const hasDot   = s.includes(".");
-
   if(hasComma && hasDot) s = s.replace(/\./g, "").replace(",", ".");
   else if(hasComma && !hasDot) s = s.replace(",", ".");
   else s = s.replace(/,/g, "");
@@ -1565,7 +1567,6 @@ function toNum(v){
   const n = parseFloat(s);
   return Number.isFinite(n) ? n : NaN;
 }
-
 function str(v){ return (v===null||v===undefined) ? "" : String(v); }
 function fmt(n, dec=2){
   if(!isFinite(n)) return "—";
@@ -1594,16 +1595,13 @@ function haversineKm(lat1, lon1, lat2, lon2){
     Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*(Math.sin(dLon/2)**2);
   return 2*R*Math.asin(Math.sqrt(a));
 }
-function saveLS(key, obj){
-  try{ localStorage.setItem(key, JSON.stringify(obj)); }catch(e){}
-}
-function loadLS(key, fallback){
-  try{
-    const s = localStorage.getItem(key);
-    return s ? JSON.parse(s) : fallback;
-  }catch(e){ return fallback; }
-}
-</script>
 
+/* =========================
+   Missing: Notizen/Preis-Funktionen wurden oben benutzt
+   Diese beiden Funktionen sind im Teil 2/3 & 3/3 vorhanden (OK)
+   ========================= */
+
+/* Ende Teil 3/3 */
+</script>
 </body>
 </html>
