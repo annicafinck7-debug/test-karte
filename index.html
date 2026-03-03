@@ -1,6 +1,3 @@
-<!-- =========================
-TEIL 1/3
-========================= -->
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -10,7 +7,6 @@ TEIL 1/3
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
   <style>
@@ -106,7 +102,7 @@ TEIL 1/3
       gap:8px;
       align-items:center;
     }
-    #loadStatus{ margin-left:auto; cursor:pointer; } /* ✅ klickbar */
+    #loadStatus{ margin-left:auto; cursor:pointer; }
 
     .dot{width:8px;height:8px;border-radius:50%;background:rgba(148,163,184,.8);display:inline-block;}
     .dot.good{background:var(--good)}
@@ -226,9 +222,7 @@ TEIL 1/3
       border:1px solid var(--ui-border) !important;
     }
 
-    /* =========================
-       ✅ Missing Panel (Klick auf LoadStatus)
-       ========================= */
+    /* ✅ Missing Panel */
     .missPanel{
       position:absolute; right:12px; top:56px; z-index:6000;
       width:440px; max-height:70vh; overflow:hidden;
@@ -343,7 +337,6 @@ TEIL 1/3
 
 <div id="ac" class="ac"></div>
 
-<!-- ✅ Missing Panel UI -->
 <div id="missPanel" class="missPanel hidden">
   <div class="missHead">
     <div><b>Nicht geladene Einträge</b><span id="missSummary" class="missSummary"></span></div>
@@ -399,7 +392,6 @@ TEIL 1/3
     <div id="results"></div>
   </div>
 </div>
-
 <script>
 /* =========================
    SHEETS
@@ -419,8 +411,6 @@ const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v11";
 const LS_PANEL_POS_KEY = "salesMap_panelPos_v11";
 const LS_COLOR_SCHEME_KEY = "salesMap_colorScheme_v6";
 const LS_THEME_KEY = "salesMap_theme_v5";
-
-/* ✅ Notizen */
 const LS_NOTES_KEY = "salesMap_notes_v1";
 
 /* =========================
@@ -428,21 +418,13 @@ const LS_NOTES_KEY = "salesMap_notes_v1";
    ========================= */
 const missing = { firmen: [], kunden: [], auftraege: [] };
 let activeMissTab = "firmen";
+
 function addMissing(tab, name, reason, extra){
   missing[tab].push({
     name: (name||"Unbekannt").trim() || "Unbekannt",
     reason: reason || "Unbekannt",
     extra: extra || ""
   });
-}
-function resetMissingRuntime(){
-  // “Runtime”-Fehler (z.B. noch nicht geocodet) bauen wir jedes Mal neu auf,
-  // aber harte Skip-Gründe aus dem Import lassen wir stehen.
-  // => Hier löschen wir nur die dynamischen Einträge und bauen sie nachher neu.
-  missing.firmen = missing.firmen.filter(x => x.reason === "Keine Adresse");
-  missing.kunden = missing.kunden.filter(x => x.reason === "Keine Adresse");
-  // Aufträge lassen wir komplett neu bauen:
-  missing.auftraege = [];
 }
 function renderMissing(tab){
   activeMissTab = tab;
@@ -482,11 +464,7 @@ function exportMissingCsv(){
   a.click();
   URL.revokeObjectURL(a.href);
 }
-</script>
-<!-- =========================
-TEIL 2/3
-========================= -->
-<script>
+
 /* =========================
    State
    ========================= */
@@ -495,19 +473,21 @@ let customerMarkers=[], firmMarkers=[];
 let selectedCustomer=null;
 let routeLayer=null;
 
-/* ✅ AUFTRÄGE */
 let deliveriesLoaded = false;
 let deliveriesAgg = [];
 let deliveriesByCustomer = new Map();
 
 let geoCache = loadLS(LS_GEO_CACHE_KEY, {});
 let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
-let notesStore = loadLS(LS_NOTES_KEY, {}); // { "F0": "...", "C3": "..." }
+let notesStore = loadLS(LS_NOTES_KEY, {});
 
 /* =========================
    Init
    ========================= */
-init();
+window.addEventListener("load", ()=>init().catch(err=>{
+  console.error("INIT ERROR:", err);
+  alert("Fehler beim Laden der Karte. Öffne F12 → Konsole, da steht der Grund.");
+}));
 
 async function init(){
   applyThemeFromLS();
@@ -531,20 +511,21 @@ async function init(){
   });
 
   setLoadStatus("Lade Tabellen …");
-  await Promise.all([loadCustomers(), loadFirms(), loadDeliveries()]);
+
+  // ✅ WICHTIG: erst Kunden + Firmen, dann Aufträge (sonst kann’s crashen / falsch matchen)
+  await loadCustomers();
+  await loadFirms();
+  await loadDeliveries();
+
   applyCacheCoordsOnly();
-
-  // ✅ Missing-Liste neu aufbauen (noch nicht geocodet etc.)
-  rebuildMissingRuntime();
-
   renderMarkers();
   updateCustomerKpi(null);
-  updateLoadStatusCounts();
+  updateLoadStatusCounts("✅ geladen");
   updateMiniKpis({good:0, mid:0, bad:0});
 }
 
 /* =========================
-   Missing UI (Panel, Tabs, Klick)
+   Missing UI
    ========================= */
 function initMissingUI(){
   document.getElementById("loadStatus")?.addEventListener("click", ()=>{
@@ -554,7 +535,6 @@ function initMissingUI(){
   document.getElementById("missClose")?.addEventListener("click", ()=>{
     document.getElementById("missPanel").classList.add("hidden");
   });
-
   document.querySelectorAll(".missTab").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       document.querySelectorAll(".missTab").forEach(b=>b.classList.remove("active"));
@@ -562,12 +542,11 @@ function initMissingUI(){
       renderMissing(btn.dataset.tab);
     });
   });
-
   document.getElementById("missExport")?.addEventListener("click", exportMissingCsv);
 }
 
 /* =========================
-   CSV (robust: fallback auf ;)
+   CSV (robust)
    ========================= */
 function parseCsv(url){
   return new Promise((resolve, reject)=>{
@@ -575,7 +554,7 @@ function parseCsv(url){
       download:true,
       header:true,
       skipEmptyLines:true,
-      delimiter: "", // auto
+      delimiter: "",
       transformHeader: (h) => String(h||"").trim().toLowerCase(),
       complete: (res)=>{
         const first = res?.data?.[0];
@@ -604,8 +583,8 @@ function parseCsv(url){
    ========================= */
 async function loadCustomers(){
   const rows = await parseCsv(CONFIG.customersCsvUrl);
-
   const list = [];
+
   rows.forEach((r, idx)=>{
     const name = str(r["name"] ?? r["kundenname"] ?? r["kunde"] ?? r["firma"] ?? r["unternehmen"]).trim();
     const ort  = str(r["ort"] ?? r["adresse"] ?? r["address"]).trim();
@@ -619,8 +598,7 @@ async function loadCustomers(){
       id:"C"+idx,
       name: name || ort || "Kunde",
       address: ort,
-      lat: NaN,
-      lon: NaN,
+      lat: NaN, lon: NaN,
       accepts: {
         lose: isYes(r["lose"]),
         sackware: isYes(r["sackware"]),
@@ -638,8 +616,8 @@ async function loadCustomers(){
    ========================= */
 async function loadFirms(){
   const rows = await parseCsv(CONFIG.firmsCsvUrl);
-
   const list = [];
+
   rows.forEach((r, idx)=>{
     const name = str(r["firma"] ?? r["name"]).trim();
     const ort  = str(r["ort"] ?? r["adresse"] ?? r["address"]).trim();
@@ -663,8 +641,7 @@ async function loadFirms(){
       base:{ lose: baseLose, sackware: baseSack, industrieware: baseInd },
       stand,
       sackInfo,
-      lat: NaN,
-      lon: NaN,
+      lat: NaN, lon: NaN,
       raw: r
     });
   });
@@ -673,9 +650,7 @@ async function loadFirms(){
 }
 
 /* =========================
-   ✅ AUFTRÄGE LADEN
-   Spalten: kunde | firma | anzahl
-   + Missing: Kunde/Firma nicht gefunden
+   Aufträge + Missing Match-Check
    ========================= */
 async function loadDeliveries(){
   try{
@@ -688,11 +663,12 @@ async function loadDeliveries(){
       return { kunde, firma, anzahl, _row: idx+2 };
     }).filter(x => x.kunde && x.firma);
 
-    // maps zum Matchen
+    // Missing auftraege neu
+    missing.auftraege = [];
+
     const custSet = new Set(customers.map(c => normText(c.name)));
     const firmSet = new Set(firms.map(f => normText(f.name)));
 
-    missing.auftraege = []; // neu aufbauen
     for(const d of deliveriesAgg){
       const k = normText(d.kunde);
       const f = normText(d.firma);
@@ -711,7 +687,6 @@ async function loadDeliveries(){
       if(!deliveriesByCustomer.has(k)) deliveriesByCustomer.set(k, []);
       deliveriesByCustomer.get(k).push({ firma: d.firma, anzahl: d.anzahl });
     }
-
     for(const [k,list] of deliveriesByCustomer.entries()){
       list.sort((a,b)=> (b.anzahl||0) - (a.anzahl||0));
       deliveriesByCustomer.set(k, list);
@@ -722,39 +697,6 @@ async function loadDeliveries(){
     deliveriesLoaded = false;
     deliveriesAgg = [];
     deliveriesByCustomer = new Map();
-  }
-}
-
-/* =========================
-   Missing Runtime bauen
-   ========================= */
-function rebuildMissingRuntime(){
-  resetMissingRuntime();
-
-  // Kunden ohne Koordinaten
-  for(const c of customers){
-    if(!c.address){
-      addMissing("kunden", c.name, "Keine Adresse", "");
-      continue;
-    }
-    if(!isFinite(c.lat) || !isFinite(c.lon)){
-      const cacheHit = geoCache[normAddr(c.address)];
-      const why = cacheHit ? "Koordinaten im Cache ungültig" : "Keine Koordinaten (noch nicht geocodet)";
-      addMissing("kunden", c.name, why, c.address);
-    }
-  }
-
-  // Firmen ohne Koordinaten
-  for(const f of firms){
-    if(!f.address){
-      addMissing("firmen", f.name, "Keine Adresse", "");
-      continue;
-    }
-    if(!isFinite(f.lat) || !isFinite(f.lon)){
-      const cacheHit = geoCache[normAddr(f.address)];
-      const why = cacheHit ? "Koordinaten im Cache ungültig" : "Keine Koordinaten (noch nicht geocodet)";
-      addMissing("firmen", f.name, why, f.address);
-    }
   }
 }
 
@@ -799,6 +741,24 @@ async function geocodeAddress(address){
   return null;
 }
 
+function rebuildMissingNoCoords(){
+  // Kunden/Firmen ohne coords in Missing hinzufügen (ohne die “Keine Adresse”-Einträge zu zerstören)
+  // -> wir entfernen alte “Keine Koordinaten…” Einträge und bauen neu.
+  missing.kunden = missing.kunden.filter(x => x.reason === "Keine Adresse");
+  missing.firmen = missing.firmen.filter(x => x.reason === "Keine Adresse");
+
+  for(const c of customers){
+    if(!isFinite(c.lat) || !isFinite(c.lon)){
+      addMissing("kunden", c.name, "Keine Koordinaten (noch nicht geocodet)", c.address);
+    }
+  }
+  for(const f of firms){
+    if(!isFinite(f.lat) || !isFinite(f.lon)){
+      addMissing("firmen", f.name, "Keine Koordinaten (noch nicht geocodet)", f.address);
+    }
+  }
+}
+
 function updateLoadStatusCounts(prefix=""){
   const totalC = customers.length;
   const totalF = firms.length;
@@ -806,9 +766,7 @@ function updateLoadStatusCounts(prefix=""){
   const doneF = firms.filter(f=>isFinite(f.lat)&&isFinite(f.lon)).length;
   const delivTxt = deliveriesLoaded ? ` · Aufträge ✓` : ` · Aufträge —`;
 
-  // ✅ Missing neu rechnen (damit Panel stimmt)
-  rebuildMissingRuntime();
-
+  rebuildMissingNoCoords();
   setLoadStatus(`${prefix}${prefix? " · ":""}Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}${delivTxt}`);
 }
 
@@ -843,12 +801,9 @@ async function geocodeAll(){
     await sleep(CONFIG.geocodeDelayMs);
   }
 
-  // ✅ Missing neu bauen (nach Geocode)
-  rebuildMissingRuntime();
-
   renderMarkers();
   if(selectedCustomer) updateCustomerKpi(selectedCustomer);
-  setLoadStatus(`✅ Fertig: Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}`);
+  updateLoadStatusCounts("✅ Fertig");
 }
 
 /* =========================
@@ -908,7 +863,6 @@ function renderMarkers(){
     });
 
     m.on("contextmenu", (e)=>openNotePopupForCustomer(c, e.latlng));
-
     customerMarkers.push(m);
   });
 
@@ -940,16 +894,14 @@ function renderMarkers(){
 
     m.on("mouseover", ()=>m.setStyle({radius:9, weight:3, fillOpacity:1}));
     m.on("mouseout", ()=>m.setStyle({radius:7, weight:2, fillOpacity:.9}));
-
     m.on("contextmenu", (e)=>openFirmPriceAndNotePopup(f, e.latlng));
 
     firmMarkers.push(m);
   });
+
+  updateLoadStatusCounts(); // ✅ Status immer korrekt halten
 }
 </script>
-<!-- =========================
-TEIL 3/3
-========================= -->
 <script>
 /* =========================
    Notizen Popups
@@ -993,10 +945,8 @@ function openNotePopupForCustomer(cust, latlng){
 
 function openFirmPriceAndNotePopup(firm, latlng){
   const product = document.getElementById("product").value;
-
   const currentOverride = priceOverrides?.[firm.id]?.[product];
   const currentPrice = isFinite(currentOverride) ? currentOverride : firm.base[product];
-
   const currentNote = (notesStore?.[firm.id] || "").trim();
 
   const div = document.createElement("div");
@@ -1039,9 +989,7 @@ function openFirmPriceAndNotePopup(firm, latlng){
           setTimeout(()=>ta.focus(), 10);
         }
       }
-      if(e.key==="Escape"){
-        map.closePopup(popup);
-      }
+      if(e.key==="Escape") map.closePopup(popup);
     });
 
     const saveNote = ()=>{
@@ -1177,13 +1125,12 @@ function setLoadStatus(text){
 }
 
 /* =========================
-   Customer selection
+   Customer selection + Orders
    ========================= */
 function selectCustomer(c){
   selectedCustomer = c;
   updateCustomerKpi(c);
   hideDetail();
-
   renderOrdersForCustomer(c);
 
   if(isFinite(c.lat)&&isFinite(c.lon)){
@@ -1191,11 +1138,9 @@ function selectCustomer(c){
   }
   document.getElementById("panel").classList.remove("hidden");
   setTimeout(()=>map.invalidateSize(), 50);
-
   renderMarkers();
 }
 
-/* ✅ AUFTRÄGE PANEL */
 function renderOrdersForCustomer(c){
   const box = document.getElementById("ordersBox");
   const title = document.getElementById("ordersTitle");
@@ -1234,7 +1179,7 @@ function renderOrdersForCustomer(c){
 }
 
 /* =========================
-   Inputs
+   Inputs + Calculate
    ========================= */
 function getInputs(){
   const factor = toNum(document.getElementById("factor").value);
@@ -1248,9 +1193,6 @@ function getInputs(){
   };
 }
 
-/* =========================
-   Calculate
-   ========================= */
 function calculate(){
   const out = document.getElementById("results");
   out.innerHTML = "";
@@ -1316,7 +1258,6 @@ function calculate(){
     }
   }
   updateMiniKpis(counts);
-
   renderMarkers();
 
   if(!results.length){
@@ -1353,16 +1294,13 @@ function calculate(){
       </td>
       <td>${makeBadge(row, targetVk)}</td>
     `;
-
     tr.addEventListener("click", async ()=>{
       const routeKm = await drawRouteOSRM(selectedCustomer, row.f);
       showDetail(row, inputs, routeKm);
       await copyOfferText(selectedCustomer, row, inputs, routeKm);
     });
-
     tbody.appendChild(tr);
   }
-
   out.appendChild(table);
 }
 
@@ -1382,7 +1320,7 @@ function makeBadge(row, targetVk){
 }
 
 /* =========================
-   Routing
+   Routing + Detail + Copy
    ========================= */
 function clearRoute(){
   if(routeLayer){
@@ -1418,9 +1356,6 @@ async function drawRouteOSRM(from, to){
   return null;
 }
 
-/* =========================
-   Detail
-   ========================= */
 function kv(k, v){
   return `<div class="kv"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`;
 }
@@ -1468,9 +1403,6 @@ function hideDetail(){
   document.getElementById("detailTitle").textContent="Details";
 }
 
-/* =========================
-   Copy offer text
-   ========================= */
 async function copyOfferText(customer, row, inputs, routeKm){
   const {product, qtyT, freightPerKm, factor, targetVk} = inputs;
   const marginPerT = isFinite(targetVk) ? (targetVk - row.deliveredPerT) : NaN;
@@ -1626,13 +1558,9 @@ function toNum(v){
   const hasComma = s.includes(",");
   const hasDot   = s.includes(".");
 
-  if(hasComma && hasDot){
-    s = s.replace(/\./g, "").replace(",", ".");
-  }else if(hasComma && !hasDot){
-    s = s.replace(",", ".");
-  }else{
-    s = s.replace(/,/g, "");
-  }
+  if(hasComma && hasDot) s = s.replace(/\./g, "").replace(",", ".");
+  else if(hasComma && !hasDot) s = s.replace(",", ".");
+  else s = s.replace(/,/g, "");
 
   const n = parseFloat(s);
   return Number.isFinite(n) ? n : NaN;
@@ -1676,5 +1604,6 @@ function loadLS(key, fallback){
   }catch(e){ return fallback; }
 }
 </script>
+
 </body>
 </html>
