@@ -103,7 +103,7 @@
       gap:8px;
       align-items:center;
     }
-    #loadStatus{ margin-left:auto; }
+    #loadStatus{ margin-left:auto; cursor:pointer; } /* ✅ klickbar */
 
     .dot{width:8px;height:8px;border-radius:50%;background:rgba(148,163,184,.8);display:inline-block;}
     .dot.good{background:var(--good)}
@@ -222,6 +222,48 @@
       background:var(--ui-bg) !important;
       border:1px solid var(--ui-border) !important;
     }
+
+    /* =========================
+       ✅ Missing Panel (Klick auf LoadStatus)
+       ========================= */
+    .missPanel{
+      position:absolute; right:12px; top:56px; z-index:6000;
+      width:440px; max-height:70vh; overflow:hidden;
+      background:rgba(15,23,42,.92); color:#fff;
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:14px; box-shadow:0 14px 45px rgba(0,0,0,.35);
+      backdrop-filter: blur(10px);
+      font:14px/1.25 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    }
+    .missPanel.hidden{display:none}
+    .missHead{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.12);
+    }
+    .missSummary{opacity:.75; margin-left:8px; font-size:12px}
+    .missClose{background:transparent; color:#fff; border:0; font-size:16px; cursor:pointer}
+    .missTabs{
+      display:flex; gap:6px; padding:8px 10px; border-bottom:1px solid rgba(255,255,255,.12);
+      flex-wrap:wrap;
+    }
+    .missTab{
+      background:rgba(255,255,255,.08); color:#fff; border:1px solid rgba(255,255,255,.12);
+      padding:6px 10px; border-radius:10px; cursor:pointer; font-size:12px;
+    }
+    .missTab.active{background:rgba(255,255,255,.18)}
+    .missExport{
+      margin-left:auto; background:rgba(99,102,241,.25);
+      border:1px solid rgba(99,102,241,.45); color:#fff;
+      padding:6px 10px; border-radius:10px; cursor:pointer; font-size:12px;
+    }
+    .missBody{padding:10px; overflow:auto; max-height:calc(70vh - 92px)}
+    .missRow{
+      padding:8px 9px; border:1px solid rgba(255,255,255,.10);
+      border-radius:12px; margin-bottom:8px; background:rgba(0,0,0,.15);
+    }
+    .missRow b{display:block; font-size:13px}
+    .missRow .r{opacity:.85; font-size:12px; margin-top:2px}
+    .missRow .m{opacity:.65; font-size:11px; margin-top:4px; white-space:pre-wrap}
   </style>
 </head>
 
@@ -287,7 +329,7 @@
   <button class="btn primary" id="btnCalc">Berechnen</button>
   <button class="btn" id="btnGeo">Geocoden</button>
 
-  <div class="pill" id="loadStatus"><span class="dot"></span> —</div>
+  <div class="pill" id="loadStatus" title="Klicken: nicht geladene Einträge anzeigen"><span class="dot"></span> —</div>
 
   <div class="pill" id="miniKpi" title="Schnellübersicht (nur wenn Ziel-VK gesetzt)">
     <span class="dot good"></span><span id="miniGood">0</span>
@@ -297,6 +339,21 @@
 </div>
 
 <div id="ac" class="ac"></div>
+
+<!-- ✅ Missing Panel UI -->
+<div id="missPanel" class="missPanel hidden">
+  <div class="missHead">
+    <div><b>Nicht geladene Einträge</b><span id="missSummary" class="missSummary"></span></div>
+    <button id="missClose" class="missClose" title="Schließen">✕</button>
+  </div>
+  <div class="missTabs">
+    <button class="missTab active" data-tab="firmen">Firmen</button>
+    <button class="missTab" data-tab="kunden">Kunden</button>
+    <button class="missTab" data-tab="auftraege">Aufträge</button>
+    <button id="missExport" class="missExport">CSV export</button>
+  </div>
+  <div id="missBody" class="missBody"></div>
+</div>
 
 <div id="panel" class="panel">
   <div id="panelHeader" class="panel-h">
@@ -339,6 +396,7 @@
     <div id="results"></div>
   </div>
 </div>
+
 <script>
 /* =========================
    SHEETS
@@ -362,6 +420,66 @@ const LS_THEME_KEY = "salesMap_theme_v5";
 /* ✅ Notizen */
 const LS_NOTES_KEY = "salesMap_notes_v1";
 
+/* =========================
+   ✅ Missing Tracking
+   ========================= */
+const missing = { firmen: [], kunden: [], auftraege: [] };
+let activeMissTab = "firmen";
+function addMissing(tab, name, reason, extra){
+  missing[tab].push({
+    name: (name||"Unbekannt").trim() || "Unbekannt",
+    reason: reason || "Unbekannt",
+    extra: extra || ""
+  });
+}
+function resetMissingRuntime(){
+  // “Runtime”-Fehler (z.B. noch nicht geocodet) bauen wir jedes Mal neu auf,
+  // aber harte Skip-Gründe aus dem Import lassen wir stehen.
+  // => Hier löschen wir nur die dynamischen Einträge und bauen sie nachher neu.
+  missing.firmen = missing.firmen.filter(x => x.reason === "Keine Adresse");
+  missing.kunden = missing.kunden.filter(x => x.reason === "Keine Adresse");
+  // Aufträge lassen wir komplett neu bauen:
+  missing.auftraege = [];
+}
+function renderMissing(tab){
+  activeMissTab = tab;
+  const body = document.getElementById("missBody");
+  const list = missing[tab] || [];
+  document.getElementById("missSummary").textContent =
+    ` · Firmen ${missing.firmen.length} · Kunden ${missing.kunden.length} · Aufträge ${missing.auftraege.length}`;
+
+  if(!list.length){
+    body.innerHTML = `<div style="opacity:.85">Keine fehlenden Einträge 🎉</div>`;
+    return;
+  }
+
+  body.innerHTML = list.map(x => `
+    <div class="missRow">
+      <b>${esc(x.name)}</b>
+      <div class="r">Grund: ${esc(x.reason)}</div>
+      ${x.extra ? `<div class="m">${esc(x.extra)}</div>` : ``}
+    </div>
+  `).join("");
+}
+function exportMissingCsv(){
+  const tab = activeMissTab;
+  const rows = missing[tab] || [];
+  const header = "Name;Grund;Extra\n";
+  const csv = header + rows.map(r=>{
+    const a = String(r.name||"").replaceAll("\n"," ").replaceAll(";"," ,");
+    const b = String(r.reason||"").replaceAll("\n"," ").replaceAll(";"," ,");
+    const c = String(r.extra||"").replaceAll("\n"," ").replaceAll(";"," ,");
+    return `${a};${b};${c}`;
+  }).join("\n");
+
+  const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `nicht_geladen_${tab}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+<script>
 /* =========================
    State
    ========================= */
@@ -398,6 +516,7 @@ async function init(){
 
   initPanelDrag();
   initUI();
+  initMissingUI();
 
   map.on("click", ()=>{
     clearRoute();
@@ -407,10 +526,37 @@ async function init(){
   setLoadStatus("Lade Tabellen …");
   await Promise.all([loadCustomers(), loadFirms(), loadDeliveries()]);
   applyCacheCoordsOnly();
+
+  // ✅ Missing-Liste neu aufbauen (noch nicht geocodet etc.)
+  rebuildMissingRuntime();
+
   renderMarkers();
   updateCustomerKpi(null);
   updateLoadStatusCounts();
   updateMiniKpis({good:0, mid:0, bad:0});
+}
+
+/* =========================
+   Missing UI (Panel, Tabs, Klick)
+   ========================= */
+function initMissingUI(){
+  document.getElementById("loadStatus")?.addEventListener("click", ()=>{
+    document.getElementById("missPanel").classList.toggle("hidden");
+    renderMissing(activeMissTab);
+  });
+  document.getElementById("missClose")?.addEventListener("click", ()=>{
+    document.getElementById("missPanel").classList.add("hidden");
+  });
+
+  document.querySelectorAll(".missTab").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      document.querySelectorAll(".missTab").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+      renderMissing(btn.dataset.tab);
+    });
+  });
+
+  document.getElementById("missExport")?.addEventListener("click", exportMissingCsv);
 }
 
 /* =========================
@@ -451,11 +597,18 @@ function parseCsv(url){
    ========================= */
 async function loadCustomers(){
   const rows = await parseCsv(CONFIG.customersCsvUrl);
-  customers = rows.map((r, idx)=>{
+
+  const list = [];
+  rows.forEach((r, idx)=>{
     const name = str(r["name"] ?? r["kundenname"] ?? r["kunde"] ?? r["firma"] ?? r["unternehmen"]).trim();
     const ort  = str(r["ort"] ?? r["adresse"] ?? r["address"]).trim();
 
-    return {
+    if(!ort){
+      addMissing("kunden", name || "Kunde", "Keine Adresse", `Zeile: ${idx+2}`);
+      return;
+    }
+
+    list.push({
       id:"C"+idx,
       name: name || ort || "Kunde",
       address: ort,
@@ -467,8 +620,10 @@ async function loadCustomers(){
         industrieware: isYes(r["industrieware"]) || isYes(r["industrie"]) || isYes(r["sonstige"])
       },
       raw: r
-    };
-  }).filter(x=>x.address);
+    });
+  });
+
+  customers = list;
 }
 
 /* =========================
@@ -477,9 +632,15 @@ async function loadCustomers(){
 async function loadFirms(){
   const rows = await parseCsv(CONFIG.firmsCsvUrl);
 
-  firms = rows.map((r, idx)=>{
+  const list = [];
+  rows.forEach((r, idx)=>{
     const name = str(r["firma"] ?? r["name"]).trim();
     const ort  = str(r["ort"] ?? r["adresse"] ?? r["address"]).trim();
+
+    if(!ort){
+      addMissing("firmen", name || "Firma", "Keine Adresse", `Zeile: ${idx+2}`);
+      return;
+    }
 
     const baseLose = toNum(r["preis"]);
     const baseSack = toNum(r["sackwarenp"]);
@@ -488,7 +649,7 @@ async function loadFirms(){
     const stand = getStandFromRow(r);
     const sackInfo = str(r["sackware"]).trim();
 
-    return {
+    list.push({
       id:"F"+idx,
       name: name || "Firma",
       address: ort,
@@ -498,24 +659,44 @@ async function loadFirms(){
       lat: NaN,
       lon: NaN,
       raw: r
-    };
-  }).filter(x=>x.name && x.address);
+    });
+  });
+
+  firms = list;
 }
 
 /* =========================
    ✅ AUFTRÄGE LADEN
    Spalten: kunde | firma | anzahl
+   + Missing: Kunde/Firma nicht gefunden
    ========================= */
 async function loadDeliveries(){
   try{
     const rows = await parseCsv(CONFIG.deliveriesCsvUrl);
 
-    deliveriesAgg = rows.map(r=>{
+    deliveriesAgg = rows.map((r, idx)=>{
       const kunde = str(r["kunde"]).trim();
       const firma = str(r["firma"]).trim();
       const anzahl = toInt(r["anzahl"]);
-      return { kunde, firma, anzahl };
+      return { kunde, firma, anzahl, _row: idx+2 };
     }).filter(x => x.kunde && x.firma);
+
+    // maps zum Matchen
+    const custSet = new Set(customers.map(c => normText(c.name)));
+    const firmSet = new Set(firms.map(f => normText(f.name)));
+
+    missing.auftraege = []; // neu aufbauen
+    for(const d of deliveriesAgg){
+      const k = normText(d.kunde);
+      const f = normText(d.firma);
+      const problems = [];
+      if(!custSet.has(k)) problems.push(`Kunde nicht gefunden: "${d.kunde}"`);
+      if(!firmSet.has(f)) problems.push(`Firma nicht gefunden: "${d.firma}"`);
+      if(!Number.isFinite(d.anzahl) || d.anzahl <= 0) problems.push(`Anzahl ungültig: "${d.anzahl}"`);
+      if(problems.length){
+        addMissing("auftraege", `${d.kunde} → ${d.firma}`, "Match-Problem", `Zeile: ${d._row}\n${problems.join("\n")}`);
+      }
+    }
 
     deliveriesByCustomer = new Map();
     for(const d of deliveriesAgg){
@@ -534,6 +715,39 @@ async function loadDeliveries(){
     deliveriesLoaded = false;
     deliveriesAgg = [];
     deliveriesByCustomer = new Map();
+  }
+}
+
+/* =========================
+   Missing Runtime bauen
+   ========================= */
+function rebuildMissingRuntime(){
+  resetMissingRuntime();
+
+  // Kunden ohne Koordinaten
+  for(const c of customers){
+    if(!c.address){
+      addMissing("kunden", c.name, "Keine Adresse", "");
+      continue;
+    }
+    if(!isFinite(c.lat) || !isFinite(c.lon)){
+      const cacheHit = geoCache[normAddr(c.address)];
+      const why = cacheHit ? "Koordinaten im Cache ungültig" : "Keine Koordinaten (noch nicht geocodet)";
+      addMissing("kunden", c.name, why, c.address);
+    }
+  }
+
+  // Firmen ohne Koordinaten
+  for(const f of firms){
+    if(!f.address){
+      addMissing("firmen", f.name, "Keine Adresse", "");
+      continue;
+    }
+    if(!isFinite(f.lat) || !isFinite(f.lon)){
+      const cacheHit = geoCache[normAddr(f.address)];
+      const why = cacheHit ? "Koordinaten im Cache ungültig" : "Keine Koordinaten (noch nicht geocodet)";
+      addMissing("firmen", f.name, why, f.address);
+    }
   }
 }
 
@@ -584,6 +798,10 @@ function updateLoadStatusCounts(prefix=""){
   const doneC = customers.filter(c=>isFinite(c.lat)&&isFinite(c.lon)).length;
   const doneF = firms.filter(f=>isFinite(f.lat)&&isFinite(f.lon)).length;
   const delivTxt = deliveriesLoaded ? ` · Aufträge ✓` : ` · Aufträge —`;
+
+  // ✅ Missing neu rechnen (damit Panel stimmt)
+  rebuildMissingRuntime();
+
   setLoadStatus(`${prefix}${prefix? " · ":""}Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}${delivTxt}`);
 }
 
@@ -617,6 +835,9 @@ async function geocodeAll(){
     }
     await sleep(CONFIG.geocodeDelayMs);
   }
+
+  // ✅ Missing neu bauen (nach Geocode)
+  rebuildMissingRuntime();
 
   renderMarkers();
   if(selectedCustomer) updateCustomerKpi(selectedCustomer);
@@ -718,7 +939,7 @@ function renderMarkers(){
     firmMarkers.push(m);
   });
 }
-
+<script>
 /* =========================
    Notizen Popups
    ========================= */
@@ -828,7 +1049,8 @@ function openFirmPriceAndNotePopup(firm, latlng){
     inp.focus(); inp.select();
   }, 30);
 }
-  /* =========================
+
+/* =========================
    UI + Autocomplete
    ========================= */
 function initUI(){
