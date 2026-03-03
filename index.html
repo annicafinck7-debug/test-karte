@@ -392,400 +392,519 @@
     <div id="results"></div>
   </div>
 </div>
-<!DOCTYPE html>
-<html lang="de">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>Verkaufs-Karte – Kunden & Firmen</title>
 
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script>
+/* =========================
+   LocalStorage
+   ========================= */
+function saveLS(key, obj){
+  try{ localStorage.setItem(key, JSON.stringify(obj)); }catch(e){}
+}
+function loadLS(key, fallback){
+  try{
+    const s = localStorage.getItem(key);
+    return s ? JSON.parse(s) : fallback;
+  }catch(e){ return fallback; }
+}
 
-  <style>
-    :root{
-      --ui-bg:#ffffff; --ui-text:#0f172a; --ui-muted:#475569;
-      --ui-border:rgba(15,23,42,.12); --ui-soft:rgba(15,23,42,.05);
-      --ui-soft2:rgba(15,23,42,.08); --ui-shadow:0 12px 34px rgba(2,6,23,.12);
+/* =========================
+   CONFIG
+   ========================= */
+const CONFIG = {
+  firmsCsvUrl: "https://docs.google.com/spreadsheets/d/1f1oD1TlYWPRbD12d05yIGkqmXVygVt3ZHLk9U0bKoTs/gviz/tq?tqx=out:csv&gid=0",
+  customersCsvUrl: "https://docs.google.com/spreadsheets/d/1DaiLyZbhJkdSQ1PHbJQmguIrDnGrrhiAVgJC4PJO8vA/gviz/tq?tqx=out:csv&gid=0",
+  deliveriesCsvUrl: "https://docs.google.com/spreadsheets/d/1fcvlM2BUDpoV-HDyPtgDf_1ZqWql6MdEMbisR0eqYYw/gviz/tq?tqx=out:csv&gid=0",
+  geocodeDelayMs: 1100
+};
 
-      --inp-bg:#ffffff; --inp-text:#0f172a; --inp-border:rgba(15,23,42,.18);
-      --inp-ph:rgba(15,23,42,.45); --inp-focus:rgba(37,99,235,.45);
+const LS_GEO_CACHE_KEY = "salesMap_geoCache_v11";
+const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v11";
+const LS_PANEL_POS_KEY = "salesMap_panelPos_v11";
+const LS_COLOR_SCHEME_KEY = "salesMap_colorScheme_v6";
+const LS_THEME_KEY = "salesMap_theme_v5";
+const LS_NOTES_KEY = "salesMap_notes_v1";
 
-      --btn-bg:rgba(15,23,42,.06); --btn-border:rgba(15,23,42,.14); --btn-text:#0f172a;
-      --btn-primary:#22c55e; --btn-primary-text:#052e16;
+/* =========================
+   Missing tracking
+   ========================= */
+const missing = { firmen: [], kunden: [], auftraege: [] };
+let activeMissTab = "firmen";
 
-      --cust-tri:#4c1d95;
+function addMissing(tab, name, reason, extra){
+  missing[tab].push({
+    name: (name||"Unbekannt").trim() || "Unbekannt",
+    reason: reason || "Unbekannt",
+    extra: extra || ""
+  });
+}
+function renderMissing(tab){
+  activeMissTab = tab;
+  const body = document.getElementById("missBody");
+  const list = missing[tab] || [];
+  document.getElementById("missSummary").textContent =
+    ` · Firmen ${missing.firmen.length} · Kunden ${missing.kunden.length} · Aufträge ${missing.auftraege.length}`;
 
-      --popup-bg:#ffffff; --popup-text:#0f172a; --popup-border:rgba(15,23,42,.12);
+  if(!list.length){
+    body.innerHTML = `<div style="opacity:.85">Keine fehlenden Einträge 🎉</div>`;
+    return;
+  }
 
-      --pill-bg:rgba(15,23,42,.05); --pill-border:rgba(15,23,42,.12);
-
-      --good:#16a34a; --mid:#f59e0b; --bad:#dc2626;
-    }
-
-    body.dark{
-      --ui-bg:#0b1220; --ui-text:#e5e7eb; --ui-muted:#a3adc2;
-      --ui-border:rgba(148,163,184,.18); --ui-soft:rgba(148,163,184,.10);
-      --ui-soft2:rgba(148,163,184,.14); --ui-shadow:0 12px 34px rgba(0,0,0,.35);
-
-      --inp-bg:#0f172a; --inp-text:#e5e7eb; --inp-border:rgba(148,163,184,.22);
-      --inp-ph:rgba(229,231,235,.55); --inp-focus:rgba(59,130,246,.55);
-
-      --btn-bg:rgba(148,163,184,.10); --btn-border:rgba(148,163,184,.22); --btn-text:#e5e7eb;
-
-      --popup-bg:#0f172a; --popup-text:#e5e7eb; --popup-border:rgba(148,163,184,.22);
-
-      --pill-bg:rgba(148,163,184,.10); --pill-border:rgba(148,163,184,.22);
-    }
-
-    html,body{height:100%;margin:0;background:var(--ui-bg)}
-    #map{position:absolute; inset:0; width:100%; height:100%; background:#d1d5db;}
-
-    .topbar{
-      position:fixed; top:0; left:0; right:0; z-index:3000;
-      display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;
-      padding:10px 12px;
-      border-radius:0 0 14px 14px;
-      background:var(--ui-bg);
-      border:1px solid var(--ui-border);
-      border-top:none;
-      box-shadow:var(--ui-shadow);
-      font:14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      color:var(--ui-text);
-      backdrop-filter: blur(6px);
-    }
-    .brand{font-weight:900; white-space:nowrap; margin-right:4px;}
-    .field{display:flex; flex-direction:column; gap:4px}
-    .field label{font-size:11px; color:var(--ui-muted); margin-left:2px}
-    .field input,.field select{
-      height:34px; padding:0 10px; border-radius:10px;
-      border:1px solid var(--inp-border);
-      background:var(--inp-bg);
-      color:var(--inp-text);
-      outline:none;
-      min-width: 120px;
-    }
-    .field input::placeholder{color:var(--inp-ph)}
-    .field input:focus,.field select:focus{border-color:var(--inp-focus); box-shadow:0 0 0 3px rgba(37,99,235,.12)}
-    .w240{min-width:240px}
-    .w140{min-width:140px}
-    .w110{min-width:110px}
-
-    .btn{
-      height:34px; padding:0 12px; border-radius:10px;
-      border:1px solid var(--btn-border);
-      background:var(--btn-bg);
-      color:var(--btn-text);
-      cursor:pointer;
-      font-weight:800;
-    }
-    .btn.primary{ background:var(--btn-primary); border-color:var(--btn-primary); color:var(--btn-primary-text); }
-    .btn:active{transform:translateY(1px)}
-
-    .pill{
-      align-self:center;
-      padding:6px 10px;
-      border-radius:999px;
-      border:1px solid var(--pill-border);
-      background:var(--pill-bg);
-      white-space:nowrap;
-      font-weight:900;
-      color:var(--ui-text);
-      display:flex;
-      gap:8px;
-      align-items:center;
-    }
-    #loadStatus{ margin-left:auto; cursor:pointer; }
-
-    .dot{width:8px;height:8px;border-radius:50%;background:rgba(148,163,184,.8);display:inline-block;}
-    .dot.good{background:var(--good)}
-    .dot.mid{background:var(--mid)}
-    .dot.bad{background:var(--bad)}
-
-    .ac{
-      position:absolute; z-index:4000;
-      background:var(--ui-bg);
-      border:1px solid var(--ui-border);
-      border-radius:12px;
-      box-shadow:var(--ui-shadow);
-      overflow:hidden;
-      font:14px/1.2 system-ui, Arial;
-      color:var(--ui-text);
-      max-height:260px;
-      overflow:auto;
-      min-width: 320px;
-      display:none;
-    }
-    .ac .item{padding:10px 12px;border-bottom:1px solid var(--ui-border);cursor:pointer;}
-    .ac .item:last-child{border-bottom:none}
-    .ac .item:hover{background:var(--ui-soft)}
-    .ac .name{font-weight:900}
-    .ac .addr{font-size:12px;color:var(--ui-muted);margin-top:2px}
-
-    .panel{
-      position:absolute; top:88px; right:12px; z-index:2500;
-      width:640px; max-height: calc(100vh - 110px);
-      display:flex; flex-direction:column;
-      background:var(--ui-bg);
-      border:1px solid var(--ui-border);
-      border-radius:16px;
-      box-shadow:var(--ui-shadow);
-      overflow:hidden;
-      font:14px/1.25 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      color:var(--ui-text);
-      user-select:none;
-    }
-    .panel.hidden{display:none;}
-    .panel-h{
-      display:flex;align-items:center;justify-content:space-between;
-      padding:10px 12px;background:var(--ui-soft);
-      border-bottom:1px solid var(--ui-border);
-      cursor:move;
-    }
-    .panel-h .t{font-weight:900}
-    .panel-h .x{
-      width:30px;height:30px;border-radius:10px;border:1px solid var(--ui-border);
-      background:var(--ui-soft2); color:var(--ui-text);
-      cursor:pointer; font-weight:900;
-    }
-    .panel-b{padding:10px 12px; overflow:auto; user-select:text;}
-
-    .kpis{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;}
-    .kpi{border:1px solid var(--ui-border);background:var(--ui-soft);border-radius:14px;padding:10px;}
-    .kpi .h{font-size:12px;color:var(--ui-muted)}
-    .kpi .v{font-weight:900;font-size:16px;margin-top:2px}
-    .small{font-size:12px;color:var(--ui-muted)}
-
-    .detail{
-      border:1px solid var(--ui-border);
-      background:var(--ui-soft);
-      border-radius:14px; padding:10px;
-      margin:10px 0 12px 0;
-    }
-    .detail .title{font-weight:900; margin-bottom:6px}
-    .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;font-size:13px;}
-    .kv{display:flex;justify-content:space-between;gap:10px}
-    .k{color:var(--ui-muted)}
-    .v{font-weight:900}
-
-    table{width:100%; border-collapse:collapse; font-size:13px;}
-    th,td{padding:10px 6px; border-bottom:1px solid var(--ui-border); vertical-align:top; text-align:left;}
-    th{font-size:12px;color:var(--ui-muted);font-weight:900;position:sticky;top:0;background:var(--ui-bg);}
-    tr{cursor:pointer}
-    tr:hover{background:var(--ui-soft)}
-    .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:900;border:1px solid var(--ui-border);background:var(--ui-soft);white-space:nowrap;color:var(--ui-text);}
-    .good{background:rgba(22,163,74,.14); border-color:rgba(22,163,74,.35); color:var(--good)}
-    .mid{background:rgba(245,158,11,.16); border-color:rgba(245,158,11,.35); color:var(--mid)}
-    .bad{background:rgba(220,38,38,.14); border-color:rgba(220,38,38,.35); color:var(--bad)}
-
-    .leaflet-popup-content-wrapper, .leaflet-popup-tip{
-      background:var(--popup-bg);
-      color:var(--popup-text);
-      border:1px solid var(--popup-border);
-      box-shadow:0 12px 34px rgba(2,6,23,.12);
-    }
-
-    .rcard{font:14px/1.25 system-ui, Arial; padding:8px; min-width:300px;}
-    .rcard .h{font-weight:900;margin-bottom:6px}
-    .rcard .row2{display:grid; grid-template-columns:1fr; gap:8px; margin-top:8px;}
-    .rcard input, .rcard textarea{
-      width:100%;
-      padding:9px 10px;
-      border-radius:12px;
-      border:1px solid var(--inp-border);
-      background:var(--inp-bg);
-      color:var(--inp-text);
-      outline:none;
-      box-sizing:border-box;
-    }
-    .rcard textarea{min-height:84px; resize:vertical;}
-    .rcard .note{font-size:12px; color:var(--ui-muted); margin-top:6px}
-
-    .tri{
-      width:0;height:0;
-      border-left:10px solid transparent;
-      border-right:10px solid transparent;
-      border-bottom:18px solid var(--cust-tri);
-      filter: drop-shadow(0 3px 6px rgba(2,6,23,.25));
-    }
-
-    .leaflet-control-zoom a{
-      color:var(--ui-text) !important;
-      background:var(--ui-bg) !important;
-      border:1px solid var(--ui-border) !important;
-    }
-
-    /* Missing Panel */
-    .missPanel{
-      position:absolute; right:12px; top:56px; z-index:6000;
-      width:440px; max-height:70vh; overflow:hidden;
-      background:rgba(15,23,42,.92); color:#fff;
-      border:1px solid rgba(255,255,255,.12);
-      border-radius:14px; box-shadow:0 14px 45px rgba(0,0,0,.35);
-      backdrop-filter: blur(10px);
-      font:14px/1.25 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-    }
-    .missPanel.hidden{display:none}
-    .missHead{
-      display:flex; align-items:center; justify-content:space-between;
-      padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.12);
-    }
-    .missSummary{opacity:.75; margin-left:8px; font-size:12px}
-    .missClose{background:transparent; color:#fff; border:0; font-size:16px; cursor:pointer}
-    .missTabs{
-      display:flex; gap:6px; padding:8px 10px; border-bottom:1px solid rgba(255,255,255,.12);
-      flex-wrap:wrap;
-    }
-    .missTab{
-      background:rgba(255,255,255,.08); color:#fff; border:1px solid rgba(255,255,255,.12);
-      padding:6px 10px; border-radius:10px; cursor:pointer; font-size:12px;
-    }
-    .missTab.active{background:rgba(255,255,255,.18)}
-    .missExport{
-      margin-left:auto; background:rgba(99,102,241,.25);
-      border:1px solid rgba(99,102,241,.45); color:#fff;
-      padding:6px 10px; border-radius:10px; cursor:pointer; font-size:12px;
-    }
-    .missBody{padding:10px; overflow:auto; max-height:calc(70vh - 92px)}
-    .missRow{
-      padding:8px 9px; border:1px solid rgba(255,255,255,.10);
-      border-radius:12px; margin-bottom:8px; background:rgba(0,0,0,.15);
-    }
-    .missRow b{display:block; font-size:13px}
-    .missRow .r{opacity:.85; font-size:12px; margin-top:2px}
-    .missRow .m{opacity:.65; font-size:11px; margin-top:4px; white-space:pre-wrap}
-  </style>
-</head>
-
-<body>
-<div id="map"></div>
-
-<div class="topbar" id="topbar">
-  <div class="brand">Verkaufs-Karte</div>
-
-  <div class="field w240">
-    <label>Kunde suchen</label>
-    <input id="custSearch" placeholder="Name / Ort …">
-  </div>
-
-  <div class="field w140">
-    <label>Produkt</label>
-    <select id="product">
-      <option value="lose">Lose</option>
-      <option value="sackware">Sackware</option>
-      <option value="industrieware">Industrieware</option>
-    </select>
-  </div>
-
-  <div class="field w140">
-    <label>Farbschema</label>
-    <select id="colorScheme">
-      <option value="standard">Standard</option>
-      <option value="pink">Pink</option>
-      <option value="pastel">Pastell</option>
-    </select>
-  </div>
-
-  <div class="field w110">
-    <label>UI</label>
-    <button class="btn" id="btnTheme" title="Hell/Dunkel umschalten">🌙</button>
-  </div>
-
-  <div class="field w140">
-    <label>Radius (km)</label>
-    <input id="radiusKm" type="number" min="0" value="250">
-  </div>
-
-  <div class="field w140">
-    <label>Menge (t)</label>
-    <input id="qtyT" type="number" min="0.1" step="0.1" value="24">
-  </div>
-
-  <div class="field w140">
-    <label>Fracht €/km</label>
-    <input id="freightPerKm" type="number" step="0.01" value="1.85">
-  </div>
-
-  <div class="field w140">
-    <label>Faktor</label>
-    <input id="factor" type="number" step="0.01" value="1.05" min="0" max="10">
-  </div>
-
-  <div class="field w140">
-    <label>Ziel-VK €/t</label>
-    <input id="targetVk" type="number" step="0.01" placeholder="optional">
-  </div>
-
-  <button class="btn primary" id="btnCalc">Berechnen</button>
-  <button class="btn" id="btnGeo">Geocoden</button>
-
-  <div class="pill" id="loadStatus" title="Klicken: nicht geladene Einträge anzeigen"><span class="dot"></span> —</div>
-
-  <div class="pill" id="miniKpi" title="Schnellübersicht (nur wenn Ziel-VK gesetzt)">
-    <span class="dot good"></span><span id="miniGood">0</span>
-    <span class="dot mid"></span><span id="miniMid">0</span>
-    <span class="dot bad"></span><span id="miniBad">0</span>
-  </div>
-</div>
-
-<div id="ac" class="ac"></div>
-
-<div id="missPanel" class="missPanel hidden">
-  <div class="missHead">
-    <div><b>Nicht geladene Einträge</b><span id="missSummary" class="missSummary"></span></div>
-    <button id="missClose" class="missClose" title="Schließen">✕</button>
-  </div>
-  <div class="missTabs">
-    <button class="missTab active" data-tab="firmen">Firmen</button>
-    <button class="missTab" data-tab="kunden">Kunden</button>
-    <button class="missTab" data-tab="auftraege">Aufträge</button>
-    <button id="missExport" class="missExport">CSV export</button>
-  </div>
-  <div id="missBody" class="missBody"></div>
-</div>
-
-<div id="panel" class="panel">
-  <div id="panelHeader" class="panel-h">
-    <div class="t">Ergebnisse</div>
-    <button id="closePanel" class="x" title="Schließen">✕</button>
-  </div>
-  <div class="panel-b">
-    <div class="kpis">
-      <div class="kpi">
-        <div class="h">Kunde</div>
-        <div class="v" id="kpiCustomer">—</div>
-        <div class="small" id="kpiCustomerAddr">—</div>
-      </div>
-      <div class="kpi">
-        <div class="h">Treffer</div>
-        <div class="v" id="kpiCount">—</div>
-        <div class="small" id="kpiQty">Menge: —</div>
-      </div>
-      <div class="kpi">
-        <div class="h">Routing</div>
-        <div class="v" id="kpiRoute">—</div>
-        <div class="small">Klick auf Zeile lädt Route</div>
-      </div>
+  body.innerHTML = list.map(x => `
+    <div class="missRow">
+      <b>${esc(x.name)}</b>
+      <div class="r">Grund: ${esc(x.reason)}</div>
+      ${x.extra ? `<div class="m">${esc(x.extra)}</div>` : ``}
     </div>
+  `).join("");
+}
+function exportMissingCsv(){
+  const tab = activeMissTab;
+  const rows = missing[tab] || [];
+  const header = "Name;Grund;Extra\n";
+  const csv = header + rows.map(r=>{
+    const a = String(r.name||"").replaceAll("\n"," ").replaceAll(";"," ,");
+    const b = String(r.reason||"").replaceAll("\n"," ").replaceAll(";"," ,");
+    const c = String(r.extra||"").replaceAll("\n"," ").replaceAll(";"," ,");
+    return `${a};${b};${c}`;
+  }).join("\n");
 
-    <div class="detail" id="ordersBox" style="display:none">
-      <div class="title" id="ordersTitle">Aufträge</div>
-      <div id="ordersList" class="small"></div>
-    </div>
+  const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `nicht_geladen_${tab}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
 
-    <div class="detail" id="detailBox" style="display:none">
-      <div class="title" id="detailTitle">Details</div>
-      <div class="detail-grid" id="detailGrid"></div>
-    </div>
+/* =========================
+   State
+   ========================= */
+let map, customers=[], firms=[];
+let customerMarkers=[], firmMarkers=[];
+let selectedCustomer=null;
+let routeLayer=null;
 
-    <div class="small" style="margin:6px 0 10px 0">
-      Klick auf Zeile: Route + Details + kopiert Angebotstext. <b>Rechtsklick Firma:</b> Preis + Notiz. <b>Rechtsklick Kunde:</b> Notiz.
-    </div>
+let deliveriesLoaded = false;
+let deliveriesAgg = [];
+let deliveriesByCustomer = new Map();
 
-    <div id="results"></div>
-  </div>
-</div>
+let geoCache = loadLS(LS_GEO_CACHE_KEY, {});
+let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
+let notesStore = loadLS(LS_NOTES_KEY, {});
+
+/* =========================
+   Init
+   ========================= */
+window.addEventListener("load", ()=>init().catch(err=>{
+  console.error("INIT ERROR:", err);
+  alert("Fehler beim Laden der Karte. Öffne F12 → Konsole für Details.");
+}));
+
+async function init(){
+  applyThemeFromLS();
+
+  // ✅ wenn Leaflet nicht geladen ist: lieber sofort sichtbar crashen
+  if(!window.L) throw new Error("Leaflet (L) nicht geladen. Prüfe Internet/CSP/Script-URL.");
+
+  map = L.map('map', { worldCopyJump:true }).setView([51.2, 10.4], 6);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap contributors"
+  }).addTo(map);
+
+  setTimeout(()=>map.invalidateSize(), 80);
+
+  initPanelDrag();
+  initUI();
+  initMissingUI();
+
+  map.on("click", ()=>{
+    clearRoute();
+    hideDetail();
+  });
+
+  setLoadStatus("Lade Tabellen …");
+
+  await loadCustomers();
+  await loadFirms();
+  await loadDeliveries();
+
+  applyCacheCoordsOnly();
+  renderMarkers();
+  updateCustomerKpi(null);
+  updateLoadStatusCounts("✅ geladen");
+  updateMiniKpis({good:0, mid:0, bad:0});
+}
+
+function initMissingUI(){
+  document.getElementById("loadStatus")?.addEventListener("click", ()=>{
+    document.getElementById("missPanel").classList.toggle("hidden");
+    renderMissing(activeMissTab);
+  });
+  document.getElementById("missClose")?.addEventListener("click", ()=>{
+    document.getElementById("missPanel").classList.add("hidden");
+  });
+  document.querySelectorAll(".missTab").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      document.querySelectorAll(".missTab").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+      renderMissing(btn.dataset.tab);
+    });
+  });
+  document.getElementById("missExport")?.addEventListener("click", exportMissingCsv);
+}
+
+/* =========================
+   CSV Parsing
+   ========================= */
+function parseCsv(url){
+  return new Promise((resolve, reject)=>{
+    Papa.parse(url, {
+      download:true,
+      header:true,
+      skipEmptyLines:true,
+      delimiter: "",
+      transformHeader: (h) => String(h||"").trim().toLowerCase(),
+      complete: (res)=>{
+        const first = res?.data?.[0];
+        const keys = first ? Object.keys(first) : [];
+        if(first && keys.length <= 1){
+          Papa.parse(url, {
+            download:true,
+            header:true,
+            skipEmptyLines:true,
+            delimiter: ";",
+            transformHeader: (h) => String(h||"").trim().toLowerCase(),
+            complete: (res2)=>resolve(res2.data),
+            error: reject
+          });
+          return;
+        }
+        resolve(res.data);
+      },
+      error: reject
+    });
+  });
+}
+
+/* =========================
+   Load Customers/Firms
+   ========================= */
+async function loadCustomers(){
+  const rows = await parseCsv(CONFIG.customersCsvUrl);
+  const list = [];
+
+  rows.forEach((r, idx)=>{
+    const name = str(r["name"] ?? r["kundenname"] ?? r["kunde"] ?? r["firma"] ?? r["unternehmen"]).trim();
+    const ort  = str(r["ort"] ?? r["adresse"] ?? r["address"]).trim();
+
+    if(!ort){
+      addMissing("kunden", name || "Kunde", "Keine Adresse", `Zeile: ${idx+2}`);
+      return;
+    }
+
+    list.push({
+      id:"C"+idx,
+      name: name || ort || "Kunde",
+      address: ort,
+      lat: NaN, lon: NaN,
+      accepts: {
+        lose: isYes(r["lose"]),
+        sackware: isYes(r["sackware"]),
+        industrieware: isYes(r["industrieware"]) || isYes(r["industrie"]) || isYes(r["sonstige"])
+      },
+      raw: r
+    });
+  });
+
+  customers = list;
+}
+
+async function loadFirms(){
+  const rows = await parseCsv(CONFIG.firmsCsvUrl);
+  const list = [];
+
+  rows.forEach((r, idx)=>{
+    const name = str(r["firma"] ?? r["name"]).trim();
+    const ort  = str(r["ort"] ?? r["adresse"] ?? r["address"]).trim();
+
+    if(!ort){
+      addMissing("firmen", name || "Firma", "Keine Adresse", `Zeile: ${idx+2}`);
+      return;
+    }
+
+    const baseLose = toNum(r["preis"]);
+    const baseSack = toNum(r["sackwarenp"]);
+    const baseInd  = toNum(r["industriewal"] ?? r["industrieware"] ?? r["industriewar"] ?? r["industriewa"]);
+
+    const stand = getStandFromRow(r);
+    const sackInfo = str(r["sackware"]).trim();
+
+    list.push({
+      id:"F"+idx,
+      name: name || "Firma",
+      address: ort,
+      base:{ lose: baseLose, sackware: baseSack, industrieware: baseInd },
+      stand,
+      sackInfo,
+      lat: NaN, lon: NaN,
+      raw: r
+    });
+  });
+
+  firms = list;
+}
+
+/* =========================
+   Deliveries + Missing match check
+   ========================= */
+async function loadDeliveries(){
+  try{
+    const rows = await parseCsv(CONFIG.deliveriesCsvUrl);
+
+    deliveriesAgg = rows.map((r, idx)=>{
+      const kunde = str(r["kunde"]).trim();
+      const firma = str(r["firma"]).trim();
+      const anzahl = toInt(r["anzahl"]);
+      return { kunde, firma, anzahl, _row: idx+2 };
+    }).filter(x => x.kunde && x.firma);
+
+    missing.auftraege = [];
+
+    const custSet = new Set(customers.map(c => normText(c.name)));
+    const firmSet = new Set(firms.map(f => normText(f.name)));
+
+    for(const d of deliveriesAgg){
+      const k = normText(d.kunde);
+      const f = normText(d.firma);
+      const problems = [];
+      if(!custSet.has(k)) problems.push(`Kunde nicht gefunden: "${d.kunde}"`);
+      if(!firmSet.has(f)) problems.push(`Firma nicht gefunden: "${d.firma}"`);
+      if(!Number.isFinite(d.anzahl) || d.anzahl <= 0) problems.push(`Anzahl ungültig: "${d.anzahl}"`);
+      if(problems.length){
+        addMissing("auftraege", `${d.kunde} → ${d.firma}`, "Match-Problem", `Zeile: ${d._row}\n${problems.join("\n")}`);
+      }
+    }
+
+    deliveriesByCustomer = new Map();
+    for(const d of deliveriesAgg){
+      const k = normText(d.kunde);
+      if(!deliveriesByCustomer.has(k)) deliveriesByCustomer.set(k, []);
+      deliveriesByCustomer.get(k).push({ firma: d.firma, anzahl: d.anzahl });
+    }
+    for(const [k,list] of deliveriesByCustomer.entries()){
+      list.sort((a,b)=> (b.anzahl||0) - (a.anzahl||0));
+      deliveriesByCustomer.set(k, list);
+    }
+
+    deliveriesLoaded = true;
+  }catch(e){
+    deliveriesLoaded = false;
+    deliveriesAgg = [];
+    deliveriesByCustomer = new Map();
+  }
+}
+
+/* =========================
+   Geocode + Cache
+   ========================= */
+function normAddr(a){ return str(a).trim().replace(/\s+/g,' '); }
+
+function applyCacheCoordsOnly(){
+  customers.forEach(c=>{
+    const hit = geoCache[normAddr(c.address)];
+    if(hit){ c.lat=hit.lat; c.lon=hit.lon; }
+  });
+  firms.forEach(f=>{
+    const hit = geoCache[normAddr(f.address)];
+    if(hit){ f.lat=hit.lat; f.lon=hit.lon; }
+  });
+}
+
+async function geocodeAddress(address){
+  const key = normAddr(address);
+  if(!key) return null;
+
+  if(geoCache[key] && isFinite(geoCache[key].lat) && isFinite(geoCache[key].lon)){
+    return {lat: geoCache[key].lat, lon: geoCache[key].lon};
+  }
+
+  const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(key);
+  try{
+    const res = await fetch(url, { headers: { "Accept":"application/json" } });
+    const data = await res.json();
+    if(data && data[0]){
+      const lat = parseFloat(data[0].lat);
+      const lon = parseFloat(data[0].lon);
+      if(isFinite(lat) && isFinite(lon)){
+        geoCache[key] = {lat, lon, ts: Date.now()};
+        saveLS(LS_GEO_CACHE_KEY, geoCache);
+        return {lat, lon};
+      }
+    }
+  }catch(e){}
+  return null;
+}
+
+function rebuildMissingNoCoords(){
+  missing.kunden = missing.kunden.filter(x => x.reason === "Keine Adresse");
+  missing.firmen = missing.firmen.filter(x => x.reason === "Keine Adresse");
+
+  for(const c of customers){
+    if(!isFinite(c.lat) || !isFinite(c.lon)){
+      addMissing("kunden", c.name, "Keine Koordinaten (noch nicht geocodet)", c.address);
+    }
+  }
+  for(const f of firms){
+    if(!isFinite(f.lat) || !isFinite(f.lon)){
+      addMissing("firmen", f.name, "Keine Koordinaten (noch nicht geocodet)", f.address);
+    }
+  }
+}
+
+function updateLoadStatusCounts(prefix=""){
+  const totalC = customers.length;
+  const totalF = firms.length;
+  const doneC = customers.filter(c=>isFinite(c.lat)&&isFinite(c.lon)).length;
+  const doneF = firms.filter(f=>isFinite(f.lat)&&isFinite(f.lon)).length;
+  const delivTxt = deliveriesLoaded ? ` · Aufträge ✓` : ` · Aufträge —`;
+
+  rebuildMissingNoCoords();
+  setLoadStatus(`${prefix}${prefix? " · ":""}Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}${delivTxt}`);
+}
+
+async function geocodeAll(){
+  const totalC = customers.length;
+  const totalF = firms.length;
+
+  let doneC = customers.filter(c=>isFinite(c.lat)&&isFinite(c.lon)).length;
+  let doneF = firms.filter(f=>isFinite(f.lat)&&isFinite(f.lon)).length;
+
+  setLoadStatus(`Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}`);
+
+  for(const c of customers){
+    if(isFinite(c.lat) && isFinite(c.lon)) continue;
+    const coords = await geocodeAddress(c.address);
+    if(coords){
+      c.lat = coords.lat; c.lon = coords.lon;
+      doneC++;
+      setLoadStatus(`Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}`);
+    }
+    await sleep(CONFIG.geocodeDelayMs);
+  }
+
+  for(const f of firms){
+    if(isFinite(f.lat) && isFinite(f.lon)) continue;
+    const coords = await geocodeAddress(f.address);
+    if(coords){
+      f.lat = coords.lat; f.lon = coords.lon;
+      doneF++;
+      setLoadStatus(`Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}`);
+    }
+    await sleep(CONFIG.geocodeDelayMs);
+  }
+
+  renderMarkers();
+  if(selectedCustomer) updateCustomerKpi(selectedCustomer);
+  updateLoadStatusCounts("✅ Fertig");
+}
+
+/* =========================
+   Markers
+   ========================= */
+function customerTriangleIcon(){
+  return L.divIcon({ html:`<div class="tri"></div>`, className:"", iconSize:[20,18], iconAnchor:[10,18] });
+}
+function firmColorByProduct(product){
+  const scheme = document.getElementById("colorScheme")?.value || "standard";
+  const palettes = {
+    standard: { lose:"#2563eb", sackware:"#f59e0b", industrieware:"#16a34a" },
+    pink:     { lose:"#e11d48", sackware:"#ec4899", industrieware:"#f9a8d4" },
+    pastel:   { lose:"#93c5fd", sackware:"#fdba74", industrieware:"#86efac" }
+  };
+  return palettes[scheme]?.[product] || "#2563eb";
+}
+function firmFillColor(f, inputs){ return firmColorByProduct(inputs.product); }
+
+function renderMarkers(){
+  customerMarkers.forEach(m=>m.remove());
+  firmMarkers.forEach(m=>m.remove());
+  customerMarkers=[]; firmMarkers=[];
+
+  customers.forEach(c=>{
+    if(!isFinite(c.lat)||!isFinite(c.lon)) return;
+
+    const note = (notesStore?.[c.id] || "").trim();
+    const noteMark = note ? " 📝" : "";
+
+    const m = L.marker([c.lat,c.lon], {icon: customerTriangleIcon()}).addTo(map);
+
+    const accTxt =
+      `Lose: ${c.accepts?.lose ? "✓" : "—"} · Sackware: ${c.accepts?.sackware ? "✓" : "—"} · Industrie: ${c.accepts?.industrieware ? "✓" : "—"}`;
+
+    m.bindTooltip(
+      `<b>${esc(c.name)}${noteMark}</b><br>${esc(c.address)}<br><span class="small">${esc(accTxt)}</span>`,
+      {direction:"top"}
+    );
+
+    m.on("click", ()=>{
+      selectCustomer(c);
+      const html = `
+        <div class="rcard">
+          <div class="h">${esc(c.name)}${note ? " 📝" : ""}</div>
+          <div class="small">${esc(c.address)}</div>
+          <div class="small" style="margin-top:6px;">Annahme: ${esc(accTxt)}</div>
+          ${note ? `<div class="small" style="margin-top:8px;"><b>Notiz:</b><br>${esc(note).replace(/\n/g,"<br>")}</div>` : ""}
+          <div class="note" style="margin-top:8px;">Rechtsklick auf den Kunden = Notiz bearbeiten</div>
+        </div>
+      `;
+      L.popup({closeButton:true, autoClose:true, closeOnClick:true})
+        .setLatLng([c.lat, c.lon])
+        .setContent(html)
+        .openOn(map);
+    });
+
+    m.on("contextmenu", (e)=>openNotePopupForCustomer(c, e.latlng));
+    customerMarkers.push(m);
+  });
+
+  const inputs = getInputs();
+  const outline = document.body.classList.contains("dark") ? "rgba(229,231,235,.9)" : "rgba(15,23,42,.9)";
+
+  firms.forEach(f=>{
+    if(!isFinite(f.lat)||!isFinite(f.lon)) return;
+
+    const fill = firmFillColor(f, inputs);
+    const standTxt = f.stand ? ` (${f.stand})` : "";
+    const sackInfoTxt = f.sackInfo ? ` · Info: ${f.sackInfo}` : "";
+
+    const note = (notesStore?.[f.id] || "").trim();
+    const noteMark = note ? " 📝" : "";
+
+    const m = L.circleMarker([f.lat,f.lon], {
+      radius:7,
+      color: outline,
+      weight: 2,
+      fillColor: fill,
+      fillOpacity:.9
+    }).addTo(map);
+
+    m.bindTooltip(
+      `<b>${esc(f.name)}${noteMark}</b><br>${esc(f.address)}<br><span class="small">Stand${esc(standTxt)}${esc(sackInfoTxt)}</span>`,
+      {direction:"top"}
+    );
+
+    m.on("mouseover", ()=>m.setStyle({radius:9, weight:3, fillOpacity:1}));
+    m.on("mouseout", ()=>m.setStyle({radius:7, weight:2, fillOpacity:.9}));
+
+    m.on("contextmenu", (e)=>openFirmPriceAndNotePopup(f, e.latlng));
+    firmMarkers.push(m);
+  });
+
+  updateLoadStatusCounts();
+}
+
 /* =========================
    Notizen Popups
    ========================= */
@@ -877,9 +996,7 @@ function openFirmPriceAndNotePopup(firm, latlng){
           setTimeout(()=>ta.focus(), 10);
         }
       }
-      if(e.key==="Escape"){
-        map.closePopup(popup);
-      }
+      if(e.key==="Escape") map.closePopup(popup);
     });
 
     const saveNote = ()=>{
@@ -1411,7 +1528,6 @@ function isYes(v){
   const s = String(v ?? "").trim().toLowerCase();
   return s === "ja" || s === "yes" || s === "y" || s === "1" || s === "true" || s === "ok";
 }
-
 function normText(s){
   return String(s||"")
     .trim()
@@ -1420,7 +1536,6 @@ function normText(s){
     .replace(/[.,;:_/\\|()\-–—]/g,"")
     .replace(/ä/g,"ae").replace(/ö/g,"oe").replace(/ü/g,"ue").replace(/ß/g,"ss");
 }
-
 function getStandFromRow(r){
   const direct = str(r["stand"]).trim();
   if(direct) return direct;
@@ -1430,7 +1545,6 @@ function getStandFromRow(r){
     if(v) return v;
   }
 
-  // fallback: suche Spalte mit leerem Header
   for(const k of Object.keys(r)){
     if(String(k).trim()===""){
       const v = str(r[k]).trim();
@@ -1439,12 +1553,10 @@ function getStandFromRow(r){
   }
   return "";
 }
-
 function toInt(v){
   const n = parseInt(String(v ?? "").trim(), 10);
   return Number.isFinite(n) ? n : 0;
 }
-
 function toNum(v){
   if(v===null || v===undefined) return NaN;
   if(typeof v==="number") return v;
@@ -1457,18 +1569,13 @@ function toNum(v){
   const hasComma = s.includes(",");
   const hasDot   = s.includes(".");
 
-  if(hasComma && hasDot){
-    s = s.replace(/\./g, "").replace(",", ".");
-  }else if(hasComma && !hasDot){
-    s = s.replace(",", ".");
-  }else{
-    s = s.replace(/,/g, "");
-  }
+  if(hasComma && hasDot) s = s.replace(/\./g, "").replace(",", ".");
+  else if(hasComma && !hasDot) s = s.replace(",", ".");
+  else s = s.replace(/,/g, "");
 
   const n = parseFloat(s);
   return Number.isFinite(n) ? n : NaN;
 }
-
 function str(v){ return (v===null||v===undefined) ? "" : String(v); }
 function fmt(n, dec=2){
   if(!isFinite(n)) return "—";
@@ -1497,10 +1604,6 @@ function haversineKm(lat1, lon1, lat2, lon2){
     Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*(Math.sin(dLon/2)**2);
   return 2*R*Math.asin(Math.sqrt(a));
 }
-
-/* =========================
-   ✅ SCRIPT + HTML ZU
-   ========================= */
 </script>
 </body>
 </html>
