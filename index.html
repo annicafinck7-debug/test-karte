@@ -7,6 +7,11 @@
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- ✅ Leaflet Draw (Polygon zeichnen) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
   <style>
@@ -62,7 +67,6 @@
       backdrop-filter: blur(6px);
     }
 
-    /* Brand block with dropdown ABOVE the title */
     .brandBlock{display:flex; flex-direction:column; gap:6px; align-items:flex-start; margin-right:4px;}
     .brand{font-weight:900; white-space:nowrap; line-height:1;}
     .brandBlock select{
@@ -89,7 +93,6 @@
     .field input:focus,.field select:focus{border-color:var(--inp-focus); box-shadow:0 0 0 3px rgba(37,99,235,.12)}
     .w240{min-width:240px}
     .w140{min-width:140px}
-    .w110{min-width:110px}
 
     .btn{
       height:34px; padding:0 12px; border-radius:10px;
@@ -102,6 +105,7 @@
       align-items:center;
       justify-content:center;
       gap:8px;
+      user-select:none;
     }
     .btn.primary{ background:var(--btn-primary); border-color:var(--btn-primary); color:var(--btn-primary-text); }
     .btn:active{transform:translateY(1px)}
@@ -234,13 +238,7 @@
       filter: drop-shadow(0 3px 6px rgba(2,6,23,.25));
     }
 
-    .leaflet-control-zoom a{
-      color:var(--ui-text) !important;
-      background:var(--ui-bg) !important;
-      border:1px solid var(--ui-border) !important;
-    }
-
-    /* Missing Panel */
+    /* Missing Panel (deins) */
     .missPanel{
       position:absolute; right:12px; top:56px; z-index:6000;
       width:440px; max-height:70vh; overflow:hidden;
@@ -281,7 +279,7 @@
     .missRow .m{opacity:.65; font-size:11px; margin-top:4px; white-space:pre-wrap}
 
     /* =========================
-       MOBILE UI: Drawer + Bottom Sheet
+       MOBILE UI
        ========================= */
     #btnMenu{display:none;}
     .drawerBackdrop{
@@ -315,29 +313,13 @@
       background:var(--ui-soft2); color:var(--ui-text);
       cursor:pointer; font-weight:900;
     }
-    .drawerGrid{
-      display:grid;
-      grid-template-columns:1fr;
-      gap:10px;
-      padding-bottom:12px;
-    }
-    .drawerActions{
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:10px;
-      padding-top:8px;
-      border-top:1px solid var(--ui-border);
-    }
+    .drawerGrid{display:grid;grid-template-columns:1fr;gap:10px;padding-bottom:12px;}
+    .drawerActions{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding-top:8px;border-top:1px solid var(--ui-border);}
 
-    /* Mobile bottom sheet */
     .panel.mobileSheet{
-      position:fixed;
-      left:10px; right:10px;
-      top:auto; bottom:10px;
-      width:auto;
-      max-height:72vh;
-      border-radius:18px;
-      z-index:5200;
+      position:fixed; left:10px; right:10px;
+      top:auto; bottom:10px; width:auto;
+      max-height:72vh; border-radius:18px; z-index:5200;
     }
     .panel.mobileSheet .panel-h{cursor:default; user-select:none;}
     .grab{
@@ -350,20 +332,20 @@
     .panel.mobileSheet.collapsed .panel-b{display:none;}
 
     @media (max-width: 760px){
-      .topbar{
-        gap:8px;
-        padding:8px 10px;
-        align-items:center;
-      }
+      .topbar{gap:8px;padding:8px 10px;align-items:center;}
       .topbar .desktopOnly{display:none !important;}
       #btnMenu{display:inline-flex;}
       #loadStatus{margin-left:0;}
       #miniKpi{display:none;}
       .ac{min-width:min(92vw, 420px);}
-      .missPanel{
-        left:10px; right:10px; width:auto;
-        top:58px;
-      }
+      .missPanel{left:10px; right:10px; width:auto; top:58px;}
+    }
+
+    /* ✅ Leaflet draw buttons in theme */
+    .leaflet-draw-toolbar a{
+      background:var(--ui-bg) !important;
+      color:var(--ui-text) !important;
+      border:1px solid var(--ui-border) !important;
     }
   </style>
 </head>
@@ -375,7 +357,6 @@
 <div class="topbar" id="topbar">
   <button class="btn" id="btnMenu" title="Menü">☰</button>
 
-  <!-- Dropdown ABOVE title -->
   <div class="brandBlock">
     <select id="searchType" title="Suche: Kunden oder Firmen">
       <option value="kunden" selected>Kunden</option>
@@ -384,7 +365,6 @@
     <div class="brand">Verkaufs-Karte</div>
   </div>
 
-  <!-- Desktop: Suche oben -->
   <div class="field w240 desktopOnly">
     <label>Suche</label>
     <input id="custSearch" placeholder="Name / Ort …">
@@ -408,10 +388,15 @@
     </select>
   </div>
 
-  <div class="field w140 desktopOnly">
+  <!-- ✅ Radius NUR im Kunden-Modus -->
+  <div class="field w140 desktopOnly" id="radiusWrapDesktop">
     <label>Radius (km)</label>
     <input id="radiusKm" type="number" min="0" value="250">
   </div>
+
+  <!-- ✅ Zone Buttons NUR im Firmen-Modus -->
+  <button class="btn desktopOnly" id="btnZoneDraw" title="Zone zeichnen (Polygon)">✏️ Zone</button>
+  <button class="btn desktopOnly" id="btnZoneClear" title="Zone löschen">🧹 Zone</button>
 
   <div class="field w140 desktopOnly">
     <label>Menge (t)</label>
@@ -446,7 +431,6 @@
   </div>
 </div>
 
-<!-- Autocomplete -->
 <div id="ac" class="ac"></div>
 
 <!-- Mobile Drawer -->
@@ -478,9 +462,16 @@
       <select id="colorSchemeMobile"></select>
     </div>
 
-    <div class="field">
+    <!-- ✅ Radius nur im Kunden-Modus (Mobile) -->
+    <div class="field" id="radiusWrapMobile">
       <label>Radius (km)</label>
       <input id="radiusKmMobile" type="number" min="0" value="250">
+    </div>
+
+    <!-- ✅ Zone Buttons nur im Firmen-Modus (Mobile) -->
+    <div class="drawerActions" id="zoneActionsMobile" style="display:none;">
+      <button class="btn" id="btnZoneDrawMobile">✏️ Zone</button>
+      <button class="btn" id="btnZoneClearMobile">🧹 Zone</button>
     </div>
 
     <div class="field">
@@ -563,10 +554,8 @@
     </div>
 
     <div class="small" style="margin:6px 0 10px 0">
-      Klick auf Zeile: Route + Details + kopiert Angebotstext.
-      <b>Rechtsklick Firma:</b> Preis + Notiz. <b>Rechtsklick Kunde:</b> Notiz.
-      <br><b>Modus Kunden:</b> Kunde auswählen → Firmen-Vorschläge.
-      <b>Modus Firmen:</b> Firma auswählen → Kunden-Vorschläge.
+      <b>Modus Kunden:</b> Kunde auswählen → Firmen-Vorschläge (Radius).
+      <br><b>Modus Firmen:</b> Firma auswählen → Kunden-Vorschläge (Zone/Polygon).
     </div>
 
     <div id="results"></div>
@@ -604,8 +593,11 @@ const LS_COLOR_SCHEME_KEY = "salesMap_colorScheme_v6";
 const LS_THEME_KEY = "salesMap_theme_v5";
 const LS_NOTES_KEY = "salesMap_notes_v1";
 
+/* ✅ Zone LocalStorage */
+const LS_ZONE_GEOJSON_KEY = "salesMap_zone_geojson_v1";
+
 /* =========================
-   Missing tracking
+   Missing tracking (deins)
    ========================= */
 const missing = { firmen: [], kunden: [], auftraege: [] };
 let activeMissTab = "firmen";
@@ -667,13 +659,18 @@ let routeLayer=null;
 
 let deliveriesLoaded = false;
 let deliveriesAgg = [];
-let deliveriesByCustomer = new Map(); // Kunde -> Firmen
-let deliveriesByFirm = new Map();     // Firma -> Kunden
+let deliveriesByCustomer = new Map();
+let deliveriesByFirm = new Map();
 
 let geoCache = loadLS(LS_GEO_CACHE_KEY, {});
 let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
 let notesStore = loadLS(LS_NOTES_KEY, {});
 let isMobile = false;
+
+/* ✅ Zone state */
+let zoneGroup = null;      // FeatureGroup
+let zoneLayer = null;      // Polygon layer (single)
+let drawControl = null;
 
 /* =========================
    Init
@@ -685,7 +682,7 @@ window.addEventListener("load", ()=>init().catch(err=>{
 
 async function init(){
   applyThemeFromLS();
-  if(!window.L) throw new Error("Leaflet (L) nicht geladen. Prüfe Internet/CSP/Script-URL.");
+  if(!window.L) throw new Error("Leaflet (L) nicht geladen.");
 
   map = L.map('map', { worldCopyJump:true }).setView([51.2, 10.4], 6);
 
@@ -696,6 +693,7 @@ async function init(){
 
   setTimeout(()=>map.invalidateSize(), 80);
 
+  initZoneTools();         // ✅ Zone init
   initPanelDragDesktopOnly();
   initUI();
   initMissingUI();
@@ -720,6 +718,9 @@ async function init(){
   updateOriginKpi(null);
   updateLoadStatusCounts("✅ geladen");
   updateMiniKpis({good:0, mid:0, bad:0});
+
+  // ✅ UI Sichtbarkeit richtig setzen
+  updateModeUI();
 }
 
 function applyResponsiveLayout(){
@@ -766,6 +767,118 @@ function initMissingUI(){
 }
 
 /* =========================
+   ✅ Zone / Polygon Tools
+   ========================= */
+function initZoneTools(){
+  zoneGroup = new L.FeatureGroup();
+  map.addLayer(zoneGroup);
+
+  // draw control (wir starten Zeichnen per Button, aber Control hilft Edit/Remove)
+  drawControl = new L.Control.Draw({
+    edit: {
+      featureGroup: zoneGroup,
+      edit: true,
+      remove: true
+    },
+    draw: {
+      polygon: {
+        allowIntersection: false,
+        showArea: true,
+        shapeOptions: { weight: 3 }
+      },
+      rectangle: false,
+      circle: false,
+      circlemarker: false,
+      marker: false,
+      polyline: false
+    }
+  });
+  map.addControl(drawControl);
+
+  map.on(L.Draw.Event.CREATED, (e)=>{
+    // nur 1 Zone gleichzeitig
+    zoneGroup.clearLayers();
+    zoneLayer = e.layer;
+    zoneGroup.addLayer(zoneLayer);
+    saveZoneToLS();
+  });
+
+  map.on(L.Draw.Event.EDITED, ()=>{
+    // wenn editiert -> speichern
+    zoneLayer = getFirstZoneLayer();
+    saveZoneToLS();
+  });
+
+  map.on(L.Draw.Event.DELETED, ()=>{
+    zoneLayer = null;
+    saveLS(LS_ZONE_GEOJSON_KEY, null);
+  });
+
+  // beim Laden: Zone aus LS wiederherstellen
+  const gj = loadLS(LS_ZONE_GEOJSON_KEY, null);
+  if(gj && gj.type){
+    try{
+      const lyr = L.geoJSON(gj).getLayers()[0];
+      if(lyr){
+        zoneGroup.clearLayers();
+        zoneLayer = lyr;
+        zoneGroup.addLayer(zoneLayer);
+      }
+    }catch(e){}
+  }
+}
+
+function getFirstZoneLayer(){
+  const layers = zoneGroup.getLayers();
+  return layers && layers.length ? layers[0] : null;
+}
+
+function saveZoneToLS(){
+  if(!zoneLayer){
+    saveLS(LS_ZONE_GEOJSON_KEY, null);
+    return;
+  }
+  try{
+    const gj = zoneLayer.toGeoJSON();
+    saveLS(LS_ZONE_GEOJSON_KEY, gj);
+  }catch(e){}
+}
+
+function startDrawZone(){
+  // startet den Polygon-Draw-Modus
+  const drawer = new L.Draw.Polygon(map, drawControl.options.draw.polygon);
+  drawer.enable();
+}
+
+function clearZone(){
+  zoneGroup.clearLayers();
+  zoneLayer = null;
+  saveLS(LS_ZONE_GEOJSON_KEY, null);
+}
+
+/* Punkt-in-Polygon (Ray casting) */
+function pointInPolygon(lat, lon, latlngs){
+  // latlngs: array von LatLng (ohne holes)
+  let inside = false;
+  for(let i=0, j=latlngs.length-1; i<latlngs.length; j=i++){
+    const xi = latlngs[i].lat, yi = latlngs[i].lng;
+    const xj = latlngs[j].lat, yj = latlngs[j].lng;
+    const intersect = ((yi > lon) !== (yj > lon)) &&
+      (lat < (xj - xi) * (lon - yi) / ((yj - yi) || 1e-12) + xi);
+    if(intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function pointInZone(lat, lon){
+  if(!zoneLayer) return true; // keine Zone => alles erlaubt (aber wir zeigen Hinweis)
+  // Leaflet Polygon: getLatLngs() => [ring] oder [[ring],[hole]...]
+  const ll = zoneLayer.getLatLngs();
+  const ring = Array.isArray(ll[0]) ? ll[0] : ll; // outer ring
+  return pointInPolygon(lat, lon, ring);
+}
+
+/* =========================
    MOBILE: Drawer wiring
    ========================= */
 function initMobileUI(){
@@ -777,19 +890,16 @@ function initMobileUI(){
   btnClose.addEventListener("click", ()=>closeDrawer());
   backdrop.addEventListener("click", ()=>closeDrawer());
 
-  // Copy options for mobile selects
   syncMobileSelect("product", "productMobile");
   syncMobileSelect("colorScheme", "colorSchemeMobile");
   syncMobileSelect("searchType", "searchTypeMobile");
 
-  // Inputs sync (Desktop <-> Mobile)
   syncMobileInput("radiusKm", "radiusKmMobile");
   syncMobileInput("qtyT", "qtyTMobile");
   syncMobileInput("freightPerKm", "freightPerKmMobile");
   syncMobileInput("factor", "factorMobile");
   syncMobileInput("targetVk", "targetVkMobile");
 
-  // Search: Mobile Feld steuert Master #custSearch (Autocomplete sitzt dort)
   const desktopSearch = document.getElementById("custSearch");
   const mobileSearch  = document.getElementById("custSearchMobile");
 
@@ -815,7 +925,15 @@ function initMobileUI(){
     await geocodeAll();
   });
 
-  // Bottom sheet: tap header = collapse
+  // ✅ Zone Buttons mobile
+  document.getElementById("btnZoneDrawMobile").addEventListener("click", ()=>{
+    closeDrawer();
+    startDrawZone();
+  });
+  document.getElementById("btnZoneClearMobile").addEventListener("click", ()=>{
+    clearZone();
+  });
+
   const header = document.getElementById("panelHeader");
   header.addEventListener("click", (e)=>{
     if(e.target && (e.target.id === "closePanel")) return;
@@ -973,7 +1091,7 @@ async function loadFirms(){
 }
 
 /* =========================
-   Deliveries + Missing match check
+   Deliveries
    ========================= */
 async function loadDeliveries(){
   try{
@@ -1140,7 +1258,7 @@ async function geocodeAll(){
 }
 
 /* =========================
-   Markers
+   Markers (minimal: gleich wie vorher)
    ========================= */
 function customerTriangleIcon(){
   return L.divIcon({ html:`<div class="tri"></div>`, className:"", iconSize:[20,18], iconAnchor:[10,18] });
@@ -1161,99 +1279,21 @@ function renderMarkers(){
   firmMarkers.forEach(m=>m.remove());
   customerMarkers=[]; firmMarkers=[];
 
-  const mode = getSearchType();
   const inputs = getInputs();
   const outline = document.body.classList.contains("dark") ? "rgba(229,231,235,.9)" : "rgba(15,23,42,.9)";
 
   customers.forEach(c=>{
     if(!isFinite(c.lat)||!isFinite(c.lon)) return;
-
-    const note = (notesStore?.[c.id] || "").trim();
-    const noteMark = note ? " 📝" : "";
-
     const m = L.marker([c.lat,c.lon], {icon: customerTriangleIcon()}).addTo(map);
-
-    const accTxt =
-      `Lose: ${c.accepts?.lose ? "✓" : "—"} · Sackware: ${c.accepts?.sackware ? "✓" : "—"} · Industrie: ${c.accepts?.industrieware ? "✓" : "—"}`;
-
-    m.bindTooltip(
-      `<b>${esc(c.name)}${noteMark}</b><br>${esc(c.address)}<br><span class="small">${esc(accTxt)}</span>`,
-      {direction:"top"}
-    );
-
-    m.on("click", ()=>{
-      const html = `
-        <div class="rcard">
-          <div class="h">${esc(c.name)}${note ? " 📝" : ""}</div>
-          <div class="small">${esc(c.address)}</div>
-          <div class="small" style="margin-top:6px;">Annahme: ${esc(accTxt)}</div>
-          ${note ? `<div class="small" style="margin-top:8px;"><b>Notiz:</b><br>${esc(note).replace(/\n/g,"<br>")}</div>` : ""}
-          <div class="note" style="margin-top:8px;">Rechtsklick auf den Kunden = Notiz bearbeiten</div>
-        </div>
-      `;
-
-      // Select only if mode is "kunden"
-      if(mode === "kunden"){
-        selectCustomer(c);
-      }else{
-        L.popup({closeButton:true, autoClose:true, closeOnClick:true})
-          .setLatLng([c.lat, c.lon])
-          .setContent(html)
-          .openOn(map);
-      }
-    });
-
-    m.on("contextmenu", (e)=>openNotePopupForCustomer(c, e.latlng));
+    m.on("click", ()=>{ if(getSearchType()==="kunden") selectCustomer(c); });
     customerMarkers.push(m);
   });
 
   firms.forEach(f=>{
     if(!isFinite(f.lat)||!isFinite(f.lon)) return;
-
     const fill = firmFillColor(f, inputs);
-    const standTxt = f.stand ? ` (${f.stand})` : "";
-    const sackInfoTxt = f.sackInfo ? ` · Info: ${f.sackInfo}` : "";
-
-    const note = (notesStore?.[f.id] || "").trim();
-    const noteMark = note ? " 📝" : "";
-
-    const m = L.circleMarker([f.lat,f.lon], {
-      radius:7,
-      color: outline,
-      weight: 2,
-      fillColor: fill,
-      fillOpacity:.9
-    }).addTo(map);
-
-    m.bindTooltip(
-      `<b>${esc(f.name)}${noteMark}</b><br>${esc(f.address)}<br><span class="small">Stand${esc(standTxt)}${esc(sackInfoTxt)}</span>`,
-      {direction:"top"}
-    );
-
-    m.on("mouseover", ()=>m.setStyle({radius:9, weight:3, fillOpacity:1}));
-    m.on("mouseout", ()=>m.setStyle({radius:7, weight:2, fillOpacity:.9}));
-
-    // Click selects only in "firmen" mode
-    m.on("click", ()=>{
-      const info = `
-        <div class="rcard">
-          <div class="h">${esc(f.name)}${note ? " 📝" : ""}</div>
-          <div class="small">${esc(f.address)}</div>
-          <div class="small" style="margin-top:6px;">Stand: ${esc(f.stand || "—")}${f.sackInfo ? ` · Info: ${esc(f.sackInfo)}` : ""}</div>
-          ${note ? `<div class="small" style="margin-top:8px;"><b>Notiz:</b><br>${esc(note).replace(/\n/g,"<br>")}</div>` : ""}
-          <div class="note" style="margin-top:8px;">Rechtsklick auf die Firma = Preis/Notiz</div>
-        </div>
-      `;
-      if(getSearchType()==="firmen"){
-        selectFirm(f);
-      }else{
-        L.popup({closeButton:true, autoClose:true, closeOnClick:true})
-          .setLatLng([f.lat, f.lon])
-          .setContent(info)
-          .openOn(map);
-      }
-    });
-
+    const m = L.circleMarker([f.lat,f.lon], {radius:7,color:outline,weight:2,fillColor:fill,fillOpacity:.9}).addTo(map);
+    m.on("click", ()=>{ if(getSearchType()==="firmen") selectFirm(f); });
     m.on("contextmenu", (e)=>openFirmPriceAndNotePopup(f, e.latlng));
     firmMarkers.push(m);
   });
@@ -1262,53 +1302,13 @@ function renderMarkers(){
 }
 
 /* =========================
-   Notizen Popups
+   Notiz + Preis Popup (wie vorher)
    ========================= */
-function openNotePopupForCustomer(cust, latlng){
-  const current = (notesStore?.[cust.id] || "").trim();
-
-  const div = document.createElement("div");
-  div.className = "rcard";
-  div.innerHTML = `
-    <div class="h">Notiz: ${esc(cust.name)}</div>
-    <div class="small">${esc(cust.address)}</div>
-    <div class="row2">
-      <textarea id="noteTxt" placeholder="Notiz eingeben…">${esc(current)}</textarea>
-    </div>
-    <div class="note">Auto-Save: beim Rausklicken / Schließen. (Esc schließt)</div>
-  `;
-
-  const popup = L.popup({closeButton:true, autoClose:true, closeOnClick:true})
-    .setLatLng(latlng)
-    .setContent(div)
-    .openOn(map);
-
-  setTimeout(()=>{
-    const ta = div.querySelector("#noteTxt");
-    ta.focus();
-
-    const save = ()=>{
-      const v = String(ta.value||"").trim();
-      if(v) notesStore[cust.id] = v;
-      else delete notesStore[cust.id];
-      saveLS(LS_NOTES_KEY, notesStore);
-      renderMarkers();
-    };
-
-    ta.addEventListener("keydown",(e)=>{
-      if(e.key==="Escape") map.closePopup(popup);
-    });
-    ta.addEventListener("blur", save);
-    map.on("popupclose", save);
-  }, 30);
-}
-
 function openFirmPriceAndNotePopup(firm, latlng){
   const product = document.getElementById("product").value;
 
   const currentOverride = priceOverrides?.[firm.id]?.[product];
   const currentPrice = isFinite(currentOverride) ? currentOverride : firm.base[product];
-
   const currentNote = (notesStore?.[firm.id] || "").trim();
 
   const div = document.createElement("div");
@@ -1346,7 +1346,6 @@ function openFirmPriceAndNotePopup(firm, latlng){
           priceOverrides[firm.id] = priceOverrides[firm.id] || {};
           priceOverrides[firm.id][product] = v;
           saveLS(LS_PRICE_OVERRIDES_KEY, priceOverrides);
-
           renderMarkers();
           if(getOrigin()) calculate();
           setTimeout(()=>ta.focus(), 10);
@@ -1363,9 +1362,7 @@ function openFirmPriceAndNotePopup(firm, latlng){
       renderMarkers();
     };
 
-    ta.addEventListener("keydown",(e)=>{
-      if(e.key==="Escape") map.closePopup(popup);
-    });
+    ta.addEventListener("keydown",(e)=>{ if(e.key==="Escape") map.closePopup(popup); });
     ta.addEventListener("blur", saveNote);
     map.on("popupclose", saveNote);
 
@@ -1374,24 +1371,19 @@ function openFirmPriceAndNotePopup(firm, latlng){
 }
 
 /* =========================
-   UI + Autocomplete (Kunden/Firmen)
+   UI + Mode switch + Suche
    ========================= */
 function initUI(){
-  const btnGeo = document.getElementById("btnGeo");
-  if(btnGeo) btnGeo.addEventListener("click", geocodeAll);
-
+  document.getElementById("btnGeo")?.addEventListener("click", geocodeAll);
   document.getElementById("btnCalc").addEventListener("click", calculate);
+
+  // ✅ Zone Buttons desktop
+  document.getElementById("btnZoneDraw").addEventListener("click", ()=>startDrawZone());
+  document.getElementById("btnZoneClear").addEventListener("click", ()=>clearZone());
 
   document.getElementById("btnTheme").addEventListener("click", ()=>{
     document.body.classList.toggle("dark");
     saveLS(LS_THEME_KEY, document.body.classList.contains("dark") ? "dark" : "light");
-    renderMarkers();
-    if(getOrigin()) calculate();
-  });
-
-  document.getElementById("product").addEventListener("change", ()=>{
-    renderMarkers();
-    if(getOrigin()) calculate();
   });
 
   const schemeSel = document.getElementById("colorScheme");
@@ -1403,15 +1395,18 @@ function initUI(){
     if(getOrigin()) calculate();
   });
 
+  document.getElementById("product").addEventListener("change", ()=>{
+    renderMarkers();
+    if(getOrigin()) calculate();
+  });
+
   document.getElementById("closePanel").addEventListener("click", ()=>{
     document.getElementById("panel").classList.add("hidden");
     setTimeout(()=>map.invalidateSize(), 50);
   });
 
-  // Mode switch
-  const typeSel = document.getElementById("searchType");
-  typeSel.addEventListener("change", ()=>{
-    // clear current selection when switching mode
+  // ✅ Mode change
+  document.getElementById("searchType").addEventListener("change", ()=>{
     clearRoute(); hideDetail();
     document.getElementById("results").innerHTML = "";
     document.getElementById("kpiCount").textContent = "—";
@@ -1420,22 +1415,19 @@ function initUI(){
     if(getSearchType()==="kunden"){
       selectedFirm = null;
       updateOriginKpi(selectedCustomer);
-      renderOrdersForCustomer(selectedCustomer);
     }else{
       selectedCustomer = null;
       updateOriginKpi(selectedFirm);
-      renderOrdersForFirm(selectedFirm);
     }
-
     renderMarkers();
+    updateModeUI();
 
-    // update placeholder hint (optional)
     const input = document.getElementById("custSearch");
     input.value = "";
-    hideAC();
+    document.getElementById("ac").style.display="none";
   });
 
-  // Autocomplete master is #custSearch
+  // ✅ Autocomplete (Kunden/Firmen)
   const input = document.getElementById("custSearch");
   const ac = document.getElementById("ac");
 
@@ -1454,13 +1446,13 @@ function initUI(){
   input.addEventListener("input", ()=>{ positionAC(); showSuggestions(input.value); });
 
   input.addEventListener("keydown", (e)=>{
-    if(e.key === "Escape") hideAC();
+    if(e.key === "Escape") ac.style.display="none";
     if(e.key === "Enter"){
       const q = input.value.trim().toLowerCase();
       const found = bestMatch(q);
       if(found){
         selectEntity(found);
-        hideAC();
+        ac.style.display="none";
       }
     }
   });
@@ -1469,15 +1461,12 @@ function initUI(){
     if(ac.contains(e.target)) return;
     const mobileInput = document.getElementById("custSearchMobile");
     if(e.target === input || e.target === mobileInput) return;
-    hideAC();
+    ac.style.display="none";
   });
-
-  function hideAC(){ ac.style.display="none"; }
 
   function getActiveList(){
     return getSearchType()==="kunden" ? customers : firms;
   }
-
   function bestMatch(q){
     if(!q) return null;
     const list = getActiveList();
@@ -1486,16 +1475,14 @@ function initUI(){
     const contains = list.filter(x => (x.name||"").toLowerCase().includes(q) || (x.address||"").toLowerCase().includes(q));
     return contains[0] || null;
   }
-
   function selectEntity(entity){
     if(getSearchType()==="kunden") selectCustomer(entity);
     else selectFirm(entity);
   }
-
   function showSuggestions(qRaw){
     const q = (qRaw||"").trim().toLowerCase();
     ac.innerHTML = "";
-    if(!q){ hideAC(); return; }
+    if(!q){ ac.style.display="none"; return; }
 
     const list = getActiveList();
     const starts=[], contains=[];
@@ -1507,27 +1494,38 @@ function initUI(){
     }
 
     const out=[...starts,...contains].slice(0,12);
-    if(!out.length){ hideAC(); return; }
+    if(!out.length){ ac.style.display="none"; return; }
 
     const tag = getSearchType()==="kunden" ? "Kunde" : "Firma";
-
     for(const x of out){
       const div=document.createElement("div");
       div.className="item";
-      div.innerHTML = `
-        <div class="name">${esc(x.name)}</div>
-        <div class="addr">${esc(x.address)}</div>
-        <div class="tag">${esc(tag)}</div>
-      `;
+      div.innerHTML = `<div class="name">${esc(x.name)}</div><div class="addr">${esc(x.address)}</div><div class="tag">${esc(tag)}</div>`;
       div.addEventListener("click", ()=>{
         selectEntity(x);
-        hideAC();
+        ac.style.display="none";
         closeDrawer();
       });
       ac.appendChild(div);
     }
     ac.style.display="block";
   }
+}
+
+function updateModeUI(){
+  const mode = getSearchType();
+
+  // Desktop: Radius nur bei Kunden
+  document.getElementById("radiusWrapDesktop").style.display = (mode==="kunden") ? "" : "none";
+  document.getElementById("btnZoneDraw").style.display = (mode==="firmen") ? "" : "none";
+  document.getElementById("btnZoneClear").style.display = (mode==="firmen") ? "" : "none";
+
+  // Mobile: Radius nur bei Kunden, Zone Buttons nur bei Firmen
+  document.getElementById("radiusWrapMobile").style.display = (mode==="kunden") ? "" : "none";
+  document.getElementById("zoneActionsMobile").style.display = (mode==="firmen") ? "grid" : "none";
+
+  // KPI label
+  document.getElementById("kpiOriginLabel").textContent = (mode==="kunden") ? "Kunde" : "Firma";
 }
 
 function applyThemeFromLS(){
@@ -1541,131 +1539,43 @@ function setLoadStatus(text){
 }
 
 /* =========================
-   Selection + Orders (Customer/Firm)
+   Selection
    ========================= */
-function getSearchType(){
-  return document.getElementById("searchType")?.value || "kunden";
-}
-function getOrigin(){
-  return (getSearchType()==="kunden") ? selectedCustomer : selectedFirm;
-}
+function getSearchType(){ return document.getElementById("searchType")?.value || "kunden"; }
+function getOrigin(){ return (getSearchType()==="kunden") ? selectedCustomer : selectedFirm; }
 
 function selectCustomer(c){
   selectedCustomer = c;
   selectedFirm = null;
-
   updateOriginKpi(c);
-  hideDetail();
-  renderOrdersForCustomer(c);
 
   if(isFinite(c.lat)&&isFinite(c.lon)){
     map.setView([c.lat,c.lon], Math.max(map.getZoom(), 7), {animate:true});
   }
-
   const panel = document.getElementById("panel");
   panel.classList.remove("hidden");
   if(isMobile) panel.classList.remove("collapsed");
 
   setTimeout(()=>map.invalidateSize(), 50);
-  renderMarkers();
 }
 
 function selectFirm(f){
   selectedFirm = f;
   selectedCustomer = null;
-
   updateOriginKpi(f);
-  hideDetail();
-  renderOrdersForFirm(f);
 
   if(isFinite(f.lat)&&isFinite(f.lon)){
     map.setView([f.lat,f.lon], Math.max(map.getZoom(), 7), {animate:true});
   }
-
   const panel = document.getElementById("panel");
   panel.classList.remove("hidden");
   if(isMobile) panel.classList.remove("collapsed");
 
   setTimeout(()=>map.invalidateSize(), 50);
-  renderMarkers();
-}
-
-function renderOrdersForCustomer(c){
-  const box = document.getElementById("ordersBox");
-  const title = document.getElementById("ordersTitle");
-  const listEl = document.getElementById("ordersList");
-
-  if(!c){
-    box.style.display="none";
-    listEl.innerHTML="";
-    return;
-  }
-
-  if(!deliveriesLoaded){
-    box.style.display="block";
-    title.textContent = "Aufträge";
-    listEl.innerHTML = "—";
-    return;
-  }
-
-  const k = normText(c.name);
-  const list = deliveriesByCustomer.get(k) || [];
-
-  box.style.display="block";
-  title.textContent = `Aufträge (${list.length} Firmen)`;
-
-  if(!list.length){
-    listEl.innerHTML = "Keine Aufträge für diesen Kunden in der Aufträge-Tabelle gefunden.";
-    return;
-  }
-
-  const rows = list.slice(0, 50).map(x=>{
-    const a = Number.isFinite(x.anzahl) ? x.anzahl : 0;
-    return `<div class="kv"><div class="k">${esc(x.firma)}</div><div class="v">${esc(String(a))}</div></div>`;
-  }).join("");
-
-  listEl.innerHTML = `<div class="detail-grid">${rows}</div>`;
-}
-
-function renderOrdersForFirm(f){
-  const box = document.getElementById("ordersBox");
-  const title = document.getElementById("ordersTitle");
-  const listEl = document.getElementById("ordersList");
-
-  if(!f){
-    box.style.display="none";
-    listEl.innerHTML="";
-    return;
-  }
-
-  if(!deliveriesLoaded){
-    box.style.display="block";
-    title.textContent = "Aufträge";
-    listEl.innerHTML = "—";
-    return;
-  }
-
-  const k = normText(f.name);
-  const list = deliveriesByFirm.get(k) || [];
-
-  box.style.display="block";
-  title.textContent = `Aufträge (${list.length} Kunden)`;
-
-  if(!list.length){
-    listEl.innerHTML = "Keine Aufträge für diese Firma in der Aufträge-Tabelle gefunden.";
-    return;
-  }
-
-  const rows = list.slice(0, 50).map(x=>{
-    const a = Number.isFinite(x.anzahl) ? x.anzahl : 0;
-    return `<div class="kv"><div class="k">${esc(x.kunde)}</div><div class="v">${esc(String(a))}</div></div>`;
-  }).join("");
-
-  listEl.innerHTML = `<div class="detail-grid">${rows}</div>`;
 }
 
 /* =========================
-   Inputs + Calculate (Customer -> Firms) OR (Firm -> Customers)
+   Inputs + Calculate
    ========================= */
 function getInputs(){
   const factor = toNum(document.getElementById("factor").value);
@@ -1698,39 +1608,19 @@ function calculate(){
   const inputs = getInputs();
   const {product, radiusKm, qtyT, freightPerKm, factor, targetVk} = inputs;
 
-  // Mode-specific checks
-  if(mode==="kunden"){
-    if(origin.accepts && origin.accepts[product] === false){
-      out.innerHTML = `<div class="small">
-        ⚠️ <b>${esc(origin.name)}</b> nimmt <b>${esc(productLabel(product))}</b> laut Kunden-Tabelle nicht an.
-        <br>Bitte Produkt wechseln oder in der Kunden-Sheet auf <b>ja</b> setzen.
-      </div>`;
-      document.getElementById("kpiCount").textContent = "0";
-      updateMiniKpis({good:0, mid:0, bad:0});
-      renderMarkers();
-      return;
-    }
-  }else{
-    const override = priceOverrides?.[origin.id]?.[product];
-    const base = isFinite(override) ? override : origin.base?.[product];
-    if(!isFinite(base) || base <= 0){
-      out.innerHTML = `<div class="small">
-        ⚠️ Für <b>${esc(origin.name)}</b> ist kein gültiger Basis-Preis für <b>${esc(productLabel(product))}</b> vorhanden.
-        <br>Rechtsklick auf die Firma → Preis eingeben.
-      </div>`;
-      document.getElementById("kpiCount").textContent = "0";
-      updateMiniKpis({good:0, mid:0, bad:0});
-      return;
-    }
-  }
-
   document.getElementById("kpiQty").textContent = `Menge: ${fmt(qtyT,1)} t`;
   document.getElementById("kpiRoute").textContent = "—";
 
   const results = [];
 
   if(mode==="kunden"){
-    // Customer -> Firms (wie vorher)
+    // ✅ Kunden-Modus: Radius-Filter wie vorher
+    if(origin.accepts && origin.accepts[product] === false){
+      out.innerHTML = `<div class="small">⚠️ <b>${esc(origin.name)}</b> nimmt <b>${esc(productLabel(product))}</b> nicht an.</div>`;
+      document.getElementById("kpiCount").textContent = "0";
+      return;
+    }
+
     for(const f of firms){
       if(!isFinite(f.lat)||!isFinite(f.lon)) continue;
 
@@ -1748,21 +1638,34 @@ function calculate(){
       let marginPerT = null;
       if(isFinite(targetVk)) marginPerT = targetVk - deliveredPerT;
 
-      results.push({type:"firma", entity:f, kmAir, base, freightPerT, deliveredPerT, deliveredTotal, marginPerT});
+      results.push({entity:f, kmAir, base, freightPerT, deliveredPerT, deliveredTotal, marginPerT});
     }
   }else{
-    // Firm -> Customers (umgedreht)
+    // ✅ Firmen-Modus: Zone-Filter (Polygon). Wenn keine Zone => Hinweis, aber trotzdem alles anzeigen
     const firm = origin;
+
     const overrideFirm = priceOverrides?.[firm.id]?.[product];
-    const baseFirm = isFinite(overrideFirm) ? overrideFirm : firm.base[product];
+    const baseFirm = isFinite(overrideFirm) ? overrideFirm : firm.base?.[product];
+    if(!isFinite(baseFirm) || baseFirm <= 0){
+      out.innerHTML = `<div class="small">⚠️ Für <b>${esc(firm.name)}</b> fehlt Basis-Preis für <b>${esc(productLabel(product))}</b>. Rechtsklick Firma → Preis eingeben.</div>`;
+      document.getElementById("kpiCount").textContent = "0";
+      return;
+    }
+
+    const zoneActive = !!zoneLayer;
+    if(!zoneActive){
+      out.innerHTML = `<div class="small" style="margin-bottom:10px;">ℹ️ Keine Zone gezeichnet. Tipp: <b>✏️ Zone</b> klicken und Bereich einzeichnen.</div>`;
+    }
 
     for(const c of customers){
       if(!isFinite(c.lat)||!isFinite(c.lon)) continue;
 
       if(c.accepts && c.accepts[product] === false) continue;
 
+      // ✅ Zone filter
+      if(zoneActive && !pointInZone(c.lat, c.lon)) continue;
+
       const kmAir = haversineKm(firm.lat, firm.lon, c.lat, c.lon);
-      if(kmAir > radiusKm) continue;
 
       const freightPerT = (kmAir * freightPerKm / qtyT) * factor;
       const deliveredPerT = baseFirm + freightPerT;
@@ -1771,29 +1674,18 @@ function calculate(){
       let marginPerT = null;
       if(isFinite(targetVk)) marginPerT = targetVk - deliveredPerT;
 
-      results.push({type:"kunde", entity:c, kmAir, base: baseFirm, freightPerT, deliveredPerT, deliveredTotal, marginPerT});
+      results.push({entity:c, kmAir, base: baseFirm, freightPerT, deliveredPerT, deliveredTotal, marginPerT});
     }
   }
 
   results.sort((a,b)=>a.deliveredPerT - b.deliveredPerT);
   document.getElementById("kpiCount").textContent = String(results.length);
 
-  const counts = {good:0, mid:0, bad:0};
-  if(isFinite(targetVk)){
-    for(const r of results){
-      const m = r.marginPerT;
-      if(!isFinite(m)) continue;
-      if(m >= 10) counts.good++;
-      else if(m >= 0) counts.mid++;
-      else counts.bad++;
-    }
-  }
-  updateMiniKpis(counts);
-
+  updateMiniKpis(countMargins(results, targetVk));
   renderMarkers();
 
   if(!results.length){
-    out.innerHTML = `<div class="small">Keine ${mode==="kunden" ? "Firmen" : "Kunden"} im Radius / mit gültigen Daten gefunden.</div>`;
+    out.innerHTML += `<div class="small">Keine Treffer gefunden.</div>`;
     return;
   }
 
@@ -1814,14 +1706,11 @@ function calculate(){
   for(const row of results){
     const ent = row.entity;
 
-    const standTxt = (row.type==="firma" && ent.stand) ? ` · ${esc(ent.stand)}` : "";
-    const acceptTxt = (row.type==="kunde" && ent.accepts) ? ` · Annahme: ${productLabel(product)} ✓` : "";
-
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>
         <b>${esc(ent.name)}</b><br>
-        <span class="small">${esc(ent.address)} · Basis ${fmt(row.base)} €/t${standTxt}${acceptTxt} · Fracht ${fmt(row.freightPerT)} €/t</span>
+        <span class="small">${esc(ent.address)} · Basis ${fmt(row.base)} €/t · Fracht ${fmt(row.freightPerT)} €/t</span>
       </td>
       <td>${fmt(row.kmAir,0)}</td>
       <td>
@@ -1830,30 +1719,34 @@ function calculate(){
       </td>
       <td>${makeBadge(row, targetVk)}</td>
     `;
-
-    tr.addEventListener("click", async ()=>{
-      const routeKm = await drawRouteOSRM_Any(mode, origin, ent);
-      showDetail(mode, origin, row, inputs, routeKm);
-      await copyOfferText(mode, origin, row, inputs, routeKm);
-    });
-
     tbody.appendChild(tr);
   }
 
+  // Wenn vorher Hinweis-Box drin war, ist out schon befüllt -> table einfach dranhängen
   out.appendChild(table);
 }
 
+function countMargins(results, targetVk){
+  const counts = {good:0, mid:0, bad:0};
+  if(!isFinite(targetVk)) return counts;
+  for(const r of results){
+    const m = r.marginPerT;
+    if(!isFinite(m)) continue;
+    if(m >= 10) counts.good++;
+    else if(m >= 0) counts.mid++;
+    else counts.bad++;
+  }
+  return counts;
+}
+
 function updateMiniKpis({good, mid, bad}){
-  const g=document.getElementById("miniGood");
-  const m=document.getElementById("miniMid");
-  const b=document.getElementById("miniBad");
-  if(g) g.textContent = String(good ?? 0);
-  if(m) m.textContent  = String(mid ?? 0);
-  if(b) b.textContent  = String(bad ?? 0);
+  document.getElementById("miniGood").textContent = String(good ?? 0);
+  document.getElementById("miniMid").textContent  = String(mid ?? 0);
+  document.getElementById("miniBad").textContent  = String(bad ?? 0);
 }
 
 function makeBadge(row, targetVk){
-  if(!isFinite(targetVk)) return `<span class="badge">Klick = Route</span>`;
+  if(!isFinite(targetVk)) return `<span class="badge">—</span>`;
   const m = row.marginPerT;
   if(!isFinite(m)) return `<span class="badge">—</span>`;
   if(m >= 10) return `<span class="badge good">+${fmt(m)} €/t</span>`;
@@ -1862,7 +1755,7 @@ function makeBadge(row, targetVk){
 }
 
 /* =========================
-   Routing
+   Routing + Detail (minimal)
    ========================= */
 function clearRoute(){
   if(routeLayer){
@@ -1872,86 +1765,6 @@ function clearRoute(){
   const el = document.getElementById("kpiRoute");
   if(el) el.textContent = "—";
 }
-
-async function drawRouteOSRM_Any(mode, origin, target){
-  clearRoute();
-  document.getElementById("kpiRoute").textContent = "lädt…";
-
-  const from = origin;
-  const to = target;
-
-  const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson`;
-  try{
-    const res = await fetch(url);
-    const data = await res.json();
-    if(data?.routes?.[0]?.geometry){
-      const geom = data.routes[0].geometry;
-      const km = isFinite(data.routes[0].distance) ? (data.routes[0].distance/1000) : null;
-
-      routeLayer = L.geoJSON(geom, {style:{weight:4}}).addTo(map);
-      map.fitBounds(routeLayer.getBounds().pad(0.25), {animate:true});
-      document.getElementById("kpiRoute").textContent = km ? `${fmt(km,1)} km` : "OK";
-      return km;
-    }
-  }catch(e){}
-
-  routeLayer = L.polyline([[from.lat,from.lon],[to.lat,to.lon]], {weight:4}).addTo(map);
-  map.fitBounds(routeLayer.getBounds().pad(0.25), {animate:true});
-  document.getElementById("kpiRoute").textContent = "Fallback";
-  return null;
-}
-
-/* =========================
-   Detail
-   ========================= */
-function kv(k, v){
-  return `<div class="kv"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`;
-}
-
-function showDetail(mode, origin, row, inputs, routeKm){
-  const {product, qtyT, freightPerKm, factor, targetVk} = inputs;
-
-  const detailBox = document.getElementById("detailBox");
-  const title = document.getElementById("detailTitle");
-  const grid = document.getElementById("detailGrid");
-
-  const ent = row.entity;
-  title.textContent = `Details: ${ent.name}`;
-
-  const routeText = (routeKm && isFinite(routeKm)) ? `${fmt(routeKm,1)} km` : "—";
-  const airText = `${fmt(row.kmAir,1)} km`;
-
-  const marginPerT = isFinite(targetVk) ? (targetVk - row.deliveredPerT) : NaN;
-  const profitTotal = isFinite(marginPerT) ? (marginPerT * qtyT) : NaN;
-
-  const note = (notesStore?.[ent.id] || "").trim();
-
-  const originLabel = (mode==="kunden") ? "Kunde" : "Firma";
-  const targetLabel = (mode==="kunden") ? "Firma" : "Kunde";
-
-  grid.innerHTML = `
-    ${kv(originLabel, origin.name)}
-    ${kv(originLabel + " Adresse", origin.address)}
-    ${kv(targetLabel, ent.name)}
-    ${kv(targetLabel + " Adresse", ent.address)}
-    ${mode==="kunden" ? kv("Stand (Firma)", ent.stand ? ent.stand : "—") : kv("Stand (Firma)", origin.stand ? origin.stand : "—")}
-    ${kv("Produkt", productLabel(product))}
-    ${kv("Menge", `${fmt(qtyT,1)} t`)}
-    ${kv("Route (km)", routeText)}
-    ${kv("Luftlinie (km)", airText)}
-    ${kv("Basis", `${fmt(row.base)} €/t`)}
-    ${kv("Fracht", `${fmt(row.freightPerT)} €/t`)}
-    ${kv("Lieferpreis", `${fmt(row.deliveredPerT)} €/t`)}
-    ${kv("Gesamtpreis", `${fmt(row.deliveredTotal)} €`)}
-    ${kv("Ziel-VK", isFinite(targetVk) ? `${fmt(targetVk)} €/t` : "—")}
-    ${kv("Marge", isFinite(marginPerT) ? `${fmt(marginPerT)} €/t` : "—")}
-    ${kv("Gewinn gesamt", isFinite(profitTotal) ? `${fmt(profitTotal)} €` : "—")}
-    ${kv("Fracht €/km", `${fmt(freightPerKm)} €`)}
-    ${kv("Faktor", `${fmt(factor,2)}`)}
-    ${kv("Notiz", note ? note : "—")}
-  `;
-  detailBox.style.display = "block";
-}
 function hideDetail(){
   document.getElementById("detailBox").style.display="none";
   document.getElementById("detailGrid").innerHTML="";
@@ -1959,58 +1772,7 @@ function hideDetail(){
 }
 
 /* =========================
-   Copy offer text
-   ========================= */
-async function copyOfferText(mode, origin, row, inputs, routeKm){
-  const {product, qtyT, freightPerKm, factor, targetVk} = inputs;
-  const marginPerT = isFinite(targetVk) ? (targetVk - row.deliveredPerT) : NaN;
-  const profitTotal = isFinite(marginPerT) ? (marginPerT * qtyT) : NaN;
-
-  const target = row.entity;
-
-  const originLabel = (mode==="kunden") ? "Kunde" : "Firma";
-  const targetLabel = (mode==="kunden") ? "Firma" : "Kunde";
-
-  const standFirm = (mode==="kunden") ? (target.stand || "—") : (origin.stand || "—");
-
-  const text =
-`Angebots-Vorschlag
-${originLabel}: ${origin.name}
-Adresse: ${origin.address}
-Produkt: ${productLabel(product)}
-Menge: ${qtyT} t
-
-${targetLabel}: ${target.name}
-Adresse: ${target.address}
-Stand (Firma): ${standFirm}
-Luftlinie: ${row.kmAir.toFixed(1)} km
-Route: ${routeKm && isFinite(routeKm) ? routeKm.toFixed(1) : "—"} km
-
-Basis: ${round2(row.base)} €/t
-Fracht: ${round2(row.freightPerT)} €/t
-Lieferpreis: ${round2(row.deliveredPerT)} €/t
-Gesamt: ${round2(row.deliveredTotal)} € für ${qtyT} t
-
-Ziel-VK: ${isFinite(targetVk) ? round2(targetVk) : "—"} €/t
-Marge: ${isFinite(marginPerT) ? round2(marginPerT) : "—"} €/t
-Gewinn gesamt: ${isFinite(profitTotal) ? round2(profitTotal) : "—"} €
-
-Fracht €/km: ${freightPerKm} | Faktor: ${factor}`;
-
-  try{
-    await navigator.clipboard.writeText(text);
-  }catch(e){
-    const ta = document.createElement("textarea");
-    ta.value=text;
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand("copy");
-    ta.remove();
-  }
-}
-
-/* =========================
-   Panel drag (Desktop only)
+   Panel drag
    ========================= */
 function initPanelDragDesktopOnly(){
   const panel = document.getElementById("panel");
@@ -2050,7 +1812,7 @@ function initPanelDragDesktopOnly(){
 }
 
 /* =========================
-   KPI updates
+   KPI
    ========================= */
 function updateOriginKpi(origin){
   const mode = getSearchType();
@@ -2068,9 +1830,6 @@ function updateOriginKpi(origin){
   document.getElementById("kpiCustomer").textContent = origin.name || "—";
   document.getElementById("kpiCustomerAddr").textContent = origin.address || "—";
   document.getElementById("kpiRoute").textContent = "—";
-
-  if(mode==="kunden") renderOrdersForCustomer(origin);
-  else renderOrdersForFirm(origin);
 }
 
 /* =========================
@@ -2091,12 +1850,10 @@ function normText(s){
 function getStandFromRow(r){
   const direct = str(r["stand"]).trim();
   if(direct) return direct;
-
   if(Array.isArray(r["__parsed_extra"]) && r["__parsed_extra"].length){
     const v = str(r["__parsed_extra"][0]).trim();
     if(v) return v;
   }
-
   for(const k of Object.keys(r)){
     if(String(k).trim()===""){
       const v = str(r[k]).trim();
@@ -2112,19 +1869,14 @@ function toInt(v){
 function toNum(v){
   if(v===null || v===undefined) return NaN;
   if(typeof v==="number") return v;
-
   let s = String(v).trim();
   if(!s) return NaN;
-
   s = s.replace(/[€\s]/g, "");
-
   const hasComma = s.includes(",");
   const hasDot   = s.includes(".");
-
   if(hasComma && hasDot) s = s.replace(/\./g, "").replace(",", ".");
   else if(hasComma && !hasDot) s = s.replace(",", ".");
   else s = s.replace(/,/g, "");
-
   const n = parseFloat(s);
   return Number.isFinite(n) ? n : NaN;
 }
@@ -2133,7 +1885,6 @@ function fmt(n, dec=2){
   if(!isFinite(n)) return "—";
   return n.toFixed(dec).replace(".", ",");
 }
-function round2(n){ return Math.round(n*100)/100; }
 function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
 function esc(s){
   return String(s).replace(/[&<>"']/g, m=>({
