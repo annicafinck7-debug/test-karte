@@ -61,7 +61,20 @@
       color:var(--ui-text);
       backdrop-filter: blur(6px);
     }
-    .brand{font-weight:900; white-space:nowrap; margin-right:4px;}
+
+    /* Brand block with dropdown ABOVE the title */
+    .brandBlock{display:flex; flex-direction:column; gap:6px; align-items:flex-start; margin-right:4px;}
+    .brand{font-weight:900; white-space:nowrap; line-height:1;}
+    .brandBlock select{
+      height:30px; padding:0 10px; border-radius:10px;
+      border:1px solid var(--inp-border);
+      background:var(--inp-bg);
+      color:var(--inp-text);
+      outline:none;
+      font-weight:800;
+      min-width:150px;
+    }
+
     .field{display:flex; flex-direction:column; gap:4px}
     .field label{font-size:11px; color:var(--ui-muted); margin-left:2px}
     .field input,.field select{
@@ -132,6 +145,7 @@
     .ac .item:hover{background:var(--ui-soft)}
     .ac .name{font-weight:900}
     .ac .addr{font-size:12px;color:var(--ui-muted);margin-top:2px}
+    .ac .tag{font-size:11px;color:var(--ui-muted);margin-top:4px}
 
     .panel{
       position:absolute; top:88px; right:12px; z-index:2500;
@@ -325,20 +339,14 @@
       border-radius:18px;
       z-index:5200;
     }
-    .panel.mobileSheet .panel-h{
-      cursor:default;
-      user-select:none;
-    }
+    .panel.mobileSheet .panel-h{cursor:default; user-select:none;}
     .grab{
       width:44px; height:5px; border-radius:999px;
       background:rgba(148,163,184,.65);
       display:none;
     }
     .panel.mobileSheet .grab{display:inline-block;}
-    .panel.mobileSheet.collapsed{
-      max-height:54px;
-      overflow:hidden;
-    }
+    .panel.mobileSheet.collapsed{max-height:54px; overflow:hidden;}
     .panel.mobileSheet.collapsed .panel-b{display:none;}
 
     @media (max-width: 760px){
@@ -347,7 +355,6 @@
         padding:8px 10px;
         align-items:center;
       }
-      .topbar .brand{font-size:14px}
       .topbar .desktopOnly{display:none !important;}
       #btnMenu{display:inline-flex;}
       #loadStatus{margin-left:0;}
@@ -367,11 +374,19 @@
 <!-- TOPBAR -->
 <div class="topbar" id="topbar">
   <button class="btn" id="btnMenu" title="Menü">☰</button>
-  <div class="brand">Verkaufs-Karte</div>
+
+  <!-- Dropdown ABOVE title -->
+  <div class="brandBlock">
+    <select id="searchType" title="Suche: Kunden oder Firmen">
+      <option value="kunden" selected>Kunden</option>
+      <option value="firmen">Firmen</option>
+    </select>
+    <div class="brand">Verkaufs-Karte</div>
+  </div>
 
   <!-- Desktop: Suche oben -->
   <div class="field w240 desktopOnly">
-    <label>Kunde suchen</label>
+    <label>Suche</label>
     <input id="custSearch" placeholder="Name / Ort …">
   </div>
 
@@ -393,7 +408,6 @@
     </select>
   </div>
 
-  <!-- ✅ Desktop: Eingaben wieder oben -->
   <div class="field w140 desktopOnly">
     <label>Radius (km)</label>
     <input id="radiusKm" type="number" min="0" value="250">
@@ -445,7 +459,12 @@
 
   <div class="drawerGrid">
     <div class="field">
-      <label>Kunde suchen</label>
+      <label>Suche (Typ)</label>
+      <select id="searchTypeMobile"></select>
+    </div>
+
+    <div class="field">
+      <label>Suche</label>
       <input id="custSearchMobile" placeholder="Name / Ort …">
     </div>
 
@@ -459,7 +478,6 @@
       <select id="colorSchemeMobile"></select>
     </div>
 
-    <!-- ✅ Mobile IDs (keine Doppel-IDs!) -->
     <div class="field">
       <label>Radius (km)</label>
       <input id="radiusKmMobile" type="number" min="0" value="250">
@@ -518,7 +536,7 @@
   <div class="panel-b">
     <div class="kpis">
       <div class="kpi">
-        <div class="h">Kunde</div>
+        <div class="h" id="kpiOriginLabel">Ausgangspunkt</div>
         <div class="v" id="kpiCustomer">—</div>
         <div class="small" id="kpiCustomerAddr">—</div>
       </div>
@@ -545,7 +563,10 @@
     </div>
 
     <div class="small" style="margin:6px 0 10px 0">
-      Klick auf Zeile: Route + Details + kopiert Angebotstext. <b>Rechtsklick Firma:</b> Preis + Notiz. <b>Rechtsklick Kunde:</b> Notiz.
+      Klick auf Zeile: Route + Details + kopiert Angebotstext.
+      <b>Rechtsklick Firma:</b> Preis + Notiz. <b>Rechtsklick Kunde:</b> Notiz.
+      <br><b>Modus Kunden:</b> Kunde auswählen → Firmen-Vorschläge.
+      <b>Modus Firmen:</b> Firma auswählen → Kunden-Vorschläge.
     </div>
 
     <div id="results"></div>
@@ -641,11 +662,13 @@ function exportMissingCsv(){
 let map, customers=[], firms=[];
 let customerMarkers=[], firmMarkers=[];
 let selectedCustomer=null;
+let selectedFirm=null;
 let routeLayer=null;
 
 let deliveriesLoaded = false;
 let deliveriesAgg = [];
-let deliveriesByCustomer = new Map();
+let deliveriesByCustomer = new Map(); // Kunde -> Firmen
+let deliveriesByFirm = new Map();     // Firma -> Kunden
 
 let geoCache = loadLS(LS_GEO_CACHE_KEY, {});
 let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
@@ -694,7 +717,7 @@ async function init(){
 
   applyCacheCoordsOnly();
   renderMarkers();
-  updateCustomerKpi(null);
+  updateOriginKpi(null);
   updateLoadStatusCounts("✅ geladen");
   updateMiniKpis({good:0, mid:0, bad:0});
 }
@@ -747,7 +770,6 @@ function initMissingUI(){
    ========================= */
 function initMobileUI(){
   const btnMenu = document.getElementById("btnMenu");
-  const drawer = document.getElementById("drawer");
   const backdrop = document.getElementById("drawerBackdrop");
   const btnClose = document.getElementById("drawerClose");
 
@@ -755,11 +777,12 @@ function initMobileUI(){
   btnClose.addEventListener("click", ()=>closeDrawer());
   backdrop.addEventListener("click", ()=>closeDrawer());
 
-  // Master-selects auf Desktop (werden auf Handy versteckt, existieren aber)
+  // Copy options for mobile selects
   syncMobileSelect("product", "productMobile");
   syncMobileSelect("colorScheme", "colorSchemeMobile");
+  syncMobileSelect("searchType", "searchTypeMobile");
 
-  // ✅ Inputs sync (Desktop <-> Mobile)
+  // Inputs sync (Desktop <-> Mobile)
   syncMobileInput("radiusKm", "radiusKmMobile");
   syncMobileInput("qtyT", "qtyTMobile");
   syncMobileInput("freightPerKm", "freightPerKmMobile");
@@ -823,15 +846,11 @@ function syncMobileInput(masterId, mobileId){
   const mobile = document.getElementById(mobileId);
   if(!master || !mobile) return;
 
-  // initial sync
   mobile.value = master.value;
 
-  // Desktop -> Mobile
   master.addEventListener("input", ()=>{
     if(mobile.value !== master.value) mobile.value = master.value;
   });
-
-  // Mobile -> Desktop
   mobile.addEventListener("input", ()=>{
     if(master.value !== mobile.value) master.value = mobile.value;
   });
@@ -985,14 +1004,26 @@ async function loadDeliveries(){
     }
 
     deliveriesByCustomer = new Map();
+    deliveriesByFirm = new Map();
+
     for(const d of deliveriesAgg){
       const k = normText(d.kunde);
+      const f = normText(d.firma);
+
       if(!deliveriesByCustomer.has(k)) deliveriesByCustomer.set(k, []);
       deliveriesByCustomer.get(k).push({ firma: d.firma, anzahl: d.anzahl });
+
+      if(!deliveriesByFirm.has(f)) deliveriesByFirm.set(f, []);
+      deliveriesByFirm.get(f).push({ kunde: d.kunde, anzahl: d.anzahl });
     }
+
     for(const [k,list] of deliveriesByCustomer.entries()){
       list.sort((a,b)=> (b.anzahl||0) - (a.anzahl||0));
       deliveriesByCustomer.set(k, list);
+    }
+    for(const [f,list] of deliveriesByFirm.entries()){
+      list.sort((a,b)=> (b.anzahl||0) - (a.anzahl||0));
+      deliveriesByFirm.set(f, list);
     }
 
     deliveriesLoaded = true;
@@ -1000,6 +1031,7 @@ async function loadDeliveries(){
     deliveriesLoaded = false;
     deliveriesAgg = [];
     deliveriesByCustomer = new Map();
+    deliveriesByFirm = new Map();
   }
 }
 
@@ -1103,7 +1135,7 @@ async function geocodeAll(){
   }
 
   renderMarkers();
-  if(selectedCustomer) updateCustomerKpi(selectedCustomer);
+  updateOriginKpi(getOrigin());
   updateLoadStatusCounts("✅ Fertig");
 }
 
@@ -1129,6 +1161,10 @@ function renderMarkers(){
   firmMarkers.forEach(m=>m.remove());
   customerMarkers=[]; firmMarkers=[];
 
+  const mode = getSearchType();
+  const inputs = getInputs();
+  const outline = document.body.classList.contains("dark") ? "rgba(229,231,235,.9)" : "rgba(15,23,42,.9)";
+
   customers.forEach(c=>{
     if(!isFinite(c.lat)||!isFinite(c.lon)) return;
 
@@ -1146,7 +1182,6 @@ function renderMarkers(){
     );
 
     m.on("click", ()=>{
-      selectCustomer(c);
       const html = `
         <div class="rcard">
           <div class="h">${esc(c.name)}${note ? " 📝" : ""}</div>
@@ -1156,18 +1191,21 @@ function renderMarkers(){
           <div class="note" style="margin-top:8px;">Rechtsklick auf den Kunden = Notiz bearbeiten</div>
         </div>
       `;
-      L.popup({closeButton:true, autoClose:true, closeOnClick:true})
-        .setLatLng([c.lat, c.lon])
-        .setContent(html)
-        .openOn(map);
+
+      // Select only if mode is "kunden"
+      if(mode === "kunden"){
+        selectCustomer(c);
+      }else{
+        L.popup({closeButton:true, autoClose:true, closeOnClick:true})
+          .setLatLng([c.lat, c.lon])
+          .setContent(html)
+          .openOn(map);
+      }
     });
 
     m.on("contextmenu", (e)=>openNotePopupForCustomer(c, e.latlng));
     customerMarkers.push(m);
   });
-
-  const inputs = getInputs();
-  const outline = document.body.classList.contains("dark") ? "rgba(229,231,235,.9)" : "rgba(15,23,42,.9)";
 
   firms.forEach(f=>{
     if(!isFinite(f.lat)||!isFinite(f.lon)) return;
@@ -1194,6 +1232,27 @@ function renderMarkers(){
 
     m.on("mouseover", ()=>m.setStyle({radius:9, weight:3, fillOpacity:1}));
     m.on("mouseout", ()=>m.setStyle({radius:7, weight:2, fillOpacity:.9}));
+
+    // Click selects only in "firmen" mode
+    m.on("click", ()=>{
+      const info = `
+        <div class="rcard">
+          <div class="h">${esc(f.name)}${note ? " 📝" : ""}</div>
+          <div class="small">${esc(f.address)}</div>
+          <div class="small" style="margin-top:6px;">Stand: ${esc(f.stand || "—")}${f.sackInfo ? ` · Info: ${esc(f.sackInfo)}` : ""}</div>
+          ${note ? `<div class="small" style="margin-top:8px;"><b>Notiz:</b><br>${esc(note).replace(/\n/g,"<br>")}</div>` : ""}
+          <div class="note" style="margin-top:8px;">Rechtsklick auf die Firma = Preis/Notiz</div>
+        </div>
+      `;
+      if(getSearchType()==="firmen"){
+        selectFirm(f);
+      }else{
+        L.popup({closeButton:true, autoClose:true, closeOnClick:true})
+          .setLatLng([f.lat, f.lon])
+          .setContent(info)
+          .openOn(map);
+      }
+    });
 
     m.on("contextmenu", (e)=>openFirmPriceAndNotePopup(f, e.latlng));
     firmMarkers.push(m);
@@ -1289,7 +1348,7 @@ function openFirmPriceAndNotePopup(firm, latlng){
           saveLS(LS_PRICE_OVERRIDES_KEY, priceOverrides);
 
           renderMarkers();
-          if(selectedCustomer) calculate();
+          if(getOrigin()) calculate();
           setTimeout(()=>ta.focus(), 10);
         }
       }
@@ -1315,7 +1374,7 @@ function openFirmPriceAndNotePopup(firm, latlng){
 }
 
 /* =========================
-   UI + Autocomplete
+   UI + Autocomplete (Kunden/Firmen)
    ========================= */
 function initUI(){
   const btnGeo = document.getElementById("btnGeo");
@@ -1327,12 +1386,12 @@ function initUI(){
     document.body.classList.toggle("dark");
     saveLS(LS_THEME_KEY, document.body.classList.contains("dark") ? "dark" : "light");
     renderMarkers();
-    if(selectedCustomer) calculate();
+    if(getOrigin()) calculate();
   });
 
   document.getElementById("product").addEventListener("change", ()=>{
     renderMarkers();
-    if(selectedCustomer) calculate();
+    if(getOrigin()) calculate();
   });
 
   const schemeSel = document.getElementById("colorScheme");
@@ -1341,12 +1400,39 @@ function initUI(){
   schemeSel.addEventListener("change", ()=>{
     saveLS(LS_COLOR_SCHEME_KEY, schemeSel.value);
     renderMarkers();
-    if(selectedCustomer) calculate();
+    if(getOrigin()) calculate();
   });
 
   document.getElementById("closePanel").addEventListener("click", ()=>{
     document.getElementById("panel").classList.add("hidden");
     setTimeout(()=>map.invalidateSize(), 50);
+  });
+
+  // Mode switch
+  const typeSel = document.getElementById("searchType");
+  typeSel.addEventListener("change", ()=>{
+    // clear current selection when switching mode
+    clearRoute(); hideDetail();
+    document.getElementById("results").innerHTML = "";
+    document.getElementById("kpiCount").textContent = "—";
+    updateMiniKpis({good:0, mid:0, bad:0});
+
+    if(getSearchType()==="kunden"){
+      selectedFirm = null;
+      updateOriginKpi(selectedCustomer);
+      renderOrdersForCustomer(selectedCustomer);
+    }else{
+      selectedCustomer = null;
+      updateOriginKpi(selectedFirm);
+      renderOrdersForFirm(selectedFirm);
+    }
+
+    renderMarkers();
+
+    // update placeholder hint (optional)
+    const input = document.getElementById("custSearch");
+    input.value = "";
+    hideAC();
   });
 
   // Autocomplete master is #custSearch
@@ -1368,13 +1454,13 @@ function initUI(){
   input.addEventListener("input", ()=>{ positionAC(); showSuggestions(input.value); });
 
   input.addEventListener("keydown", (e)=>{
-    if(e.key === "Escape") ac.style.display="none";
+    if(e.key === "Escape") hideAC();
     if(e.key === "Enter"){
       const q = input.value.trim().toLowerCase();
-      const found = bestCustomerMatch(q);
+      const found = bestMatch(q);
       if(found){
-        selectCustomer(found);
-        ac.style.display="none";
+        selectEntity(found);
+        hideAC();
       }
     }
   });
@@ -1383,40 +1469,59 @@ function initUI(){
     if(ac.contains(e.target)) return;
     const mobileInput = document.getElementById("custSearchMobile");
     if(e.target === input || e.target === mobileInput) return;
-    ac.style.display="none";
+    hideAC();
   });
 
-  function bestCustomerMatch(q){
+  function hideAC(){ ac.style.display="none"; }
+
+  function getActiveList(){
+    return getSearchType()==="kunden" ? customers : firms;
+  }
+
+  function bestMatch(q){
     if(!q) return null;
-    const starts = customers.filter(c => (c.name||"").toLowerCase().startsWith(q) || (c.address||"").toLowerCase().startsWith(q));
+    const list = getActiveList();
+    const starts = list.filter(x => (x.name||"").toLowerCase().startsWith(q) || (x.address||"").toLowerCase().startsWith(q));
     if(starts.length) return starts[0];
-    const contains = customers.filter(c => (c.name||"").toLowerCase().includes(q) || (c.address||"").toLowerCase().includes(q));
+    const contains = list.filter(x => (x.name||"").toLowerCase().includes(q) || (x.address||"").toLowerCase().includes(q));
     return contains[0] || null;
+  }
+
+  function selectEntity(entity){
+    if(getSearchType()==="kunden") selectCustomer(entity);
+    else selectFirm(entity);
   }
 
   function showSuggestions(qRaw){
     const q = (qRaw||"").trim().toLowerCase();
     ac.innerHTML = "";
-    if(!q){ ac.style.display="none"; return; }
+    if(!q){ hideAC(); return; }
 
+    const list = getActiveList();
     const starts=[], contains=[];
-    for(const c of customers){
-      const name=(c.name||"").toLowerCase();
-      const addr=(c.address||"").toLowerCase();
-      if(name.startsWith(q) || addr.startsWith(q)) starts.push(c);
-      else if(name.includes(q) || addr.includes(q)) contains.push(c);
+    for(const x of list){
+      const name=(x.name||"").toLowerCase();
+      const addr=(x.address||"").toLowerCase();
+      if(name.startsWith(q) || addr.startsWith(q)) starts.push(x);
+      else if(name.includes(q) || addr.includes(q)) contains.push(x);
     }
 
-    const list=[...starts,...contains].slice(0,12);
-    if(!list.length){ ac.style.display="none"; return; }
+    const out=[...starts,...contains].slice(0,12);
+    if(!out.length){ hideAC(); return; }
 
-    for(const c of list){
+    const tag = getSearchType()==="kunden" ? "Kunde" : "Firma";
+
+    for(const x of out){
       const div=document.createElement("div");
       div.className="item";
-      div.innerHTML = `<div class="name">${esc(c.name)}</div><div class="addr">${esc(c.address)}</div>`;
+      div.innerHTML = `
+        <div class="name">${esc(x.name)}</div>
+        <div class="addr">${esc(x.address)}</div>
+        <div class="tag">${esc(tag)}</div>
+      `;
       div.addEventListener("click", ()=>{
-        selectCustomer(c);
-        ac.style.display="none";
+        selectEntity(x);
+        hideAC();
         closeDrawer();
       });
       ac.appendChild(div);
@@ -1436,16 +1541,45 @@ function setLoadStatus(text){
 }
 
 /* =========================
-   Customer selection + Orders
+   Selection + Orders (Customer/Firm)
    ========================= */
+function getSearchType(){
+  return document.getElementById("searchType")?.value || "kunden";
+}
+function getOrigin(){
+  return (getSearchType()==="kunden") ? selectedCustomer : selectedFirm;
+}
+
 function selectCustomer(c){
   selectedCustomer = c;
-  updateCustomerKpi(c);
+  selectedFirm = null;
+
+  updateOriginKpi(c);
   hideDetail();
   renderOrdersForCustomer(c);
 
   if(isFinite(c.lat)&&isFinite(c.lon)){
     map.setView([c.lat,c.lon], Math.max(map.getZoom(), 7), {animate:true});
+  }
+
+  const panel = document.getElementById("panel");
+  panel.classList.remove("hidden");
+  if(isMobile) panel.classList.remove("collapsed");
+
+  setTimeout(()=>map.invalidateSize(), 50);
+  renderMarkers();
+}
+
+function selectFirm(f){
+  selectedFirm = f;
+  selectedCustomer = null;
+
+  updateOriginKpi(f);
+  hideDetail();
+  renderOrdersForFirm(f);
+
+  if(isFinite(f.lat)&&isFinite(f.lon)){
+    map.setView([f.lat,f.lon], Math.max(map.getZoom(), 7), {animate:true});
   }
 
   const panel = document.getElementById("panel");
@@ -1493,8 +1627,45 @@ function renderOrdersForCustomer(c){
   listEl.innerHTML = `<div class="detail-grid">${rows}</div>`;
 }
 
+function renderOrdersForFirm(f){
+  const box = document.getElementById("ordersBox");
+  const title = document.getElementById("ordersTitle");
+  const listEl = document.getElementById("ordersList");
+
+  if(!f){
+    box.style.display="none";
+    listEl.innerHTML="";
+    return;
+  }
+
+  if(!deliveriesLoaded){
+    box.style.display="block";
+    title.textContent = "Aufträge";
+    listEl.innerHTML = "—";
+    return;
+  }
+
+  const k = normText(f.name);
+  const list = deliveriesByFirm.get(k) || [];
+
+  box.style.display="block";
+  title.textContent = `Aufträge (${list.length} Kunden)`;
+
+  if(!list.length){
+    listEl.innerHTML = "Keine Aufträge für diese Firma in der Aufträge-Tabelle gefunden.";
+    return;
+  }
+
+  const rows = list.slice(0, 50).map(x=>{
+    const a = Number.isFinite(x.anzahl) ? x.anzahl : 0;
+    return `<div class="kv"><div class="k">${esc(x.kunde)}</div><div class="v">${esc(String(a))}</div></div>`;
+  }).join("");
+
+  listEl.innerHTML = `<div class="detail-grid">${rows}</div>`;
+}
+
 /* =========================
-   Inputs + Calculate
+   Inputs + Calculate (Customer -> Firms) OR (Firm -> Customers)
    ========================= */
 function getInputs(){
   const factor = toNum(document.getElementById("factor").value);
@@ -1514,8 +1685,11 @@ function calculate(){
   hideDetail();
   clearRoute();
 
-  if(!selectedCustomer || !isFinite(selectedCustomer.lat) || !isFinite(selectedCustomer.lon)){
-    out.innerHTML = `<div class="small">Bitte zuerst einen Kunden auswählen (ggf. einmal „Geocoden“ drücken).</div>`;
+  const mode = getSearchType();
+  const origin = getOrigin();
+
+  if(!origin || !isFinite(origin.lat) || !isFinite(origin.lon)){
+    out.innerHTML = `<div class="small">Bitte zuerst ${mode==="kunden" ? "einen Kunden" : "eine Firma"} auswählen (ggf. einmal „Geocoden“ drücken).</div>`;
     document.getElementById("kpiCount").textContent = "—";
     updateMiniKpis({good:0, mid:0, bad:0});
     return;
@@ -1524,39 +1698,81 @@ function calculate(){
   const inputs = getInputs();
   const {product, radiusKm, qtyT, freightPerKm, factor, targetVk} = inputs;
 
-  if(selectedCustomer.accepts && selectedCustomer.accepts[product] === false){
-    out.innerHTML = `<div class="small">
-      ⚠️ <b>${esc(selectedCustomer.name)}</b> nimmt <b>${esc(productLabel(product))}</b> laut Kunden-Tabelle nicht an.
-      <br>Bitte Produkt wechseln oder in der Kunden-Sheet auf <b>ja</b> setzen.
-    </div>`;
-    document.getElementById("kpiCount").textContent = "0";
-    updateMiniKpis({good:0, mid:0, bad:0});
-    renderMarkers();
-    return;
+  // Mode-specific checks
+  if(mode==="kunden"){
+    if(origin.accepts && origin.accepts[product] === false){
+      out.innerHTML = `<div class="small">
+        ⚠️ <b>${esc(origin.name)}</b> nimmt <b>${esc(productLabel(product))}</b> laut Kunden-Tabelle nicht an.
+        <br>Bitte Produkt wechseln oder in der Kunden-Sheet auf <b>ja</b> setzen.
+      </div>`;
+      document.getElementById("kpiCount").textContent = "0";
+      updateMiniKpis({good:0, mid:0, bad:0});
+      renderMarkers();
+      return;
+    }
+  }else{
+    const override = priceOverrides?.[origin.id]?.[product];
+    const base = isFinite(override) ? override : origin.base?.[product];
+    if(!isFinite(base) || base <= 0){
+      out.innerHTML = `<div class="small">
+        ⚠️ Für <b>${esc(origin.name)}</b> ist kein gültiger Basis-Preis für <b>${esc(productLabel(product))}</b> vorhanden.
+        <br>Rechtsklick auf die Firma → Preis eingeben.
+      </div>`;
+      document.getElementById("kpiCount").textContent = "0";
+      updateMiniKpis({good:0, mid:0, bad:0});
+      return;
+    }
   }
 
   document.getElementById("kpiQty").textContent = `Menge: ${fmt(qtyT,1)} t`;
   document.getElementById("kpiRoute").textContent = "—";
 
   const results = [];
-  for(const f of firms){
-    if(!isFinite(f.lat)||!isFinite(f.lon)) continue;
 
-    const kmAir = haversineKm(selectedCustomer.lat, selectedCustomer.lon, f.lat, f.lon);
-    if(kmAir > radiusKm) continue;
+  if(mode==="kunden"){
+    // Customer -> Firms (wie vorher)
+    for(const f of firms){
+      if(!isFinite(f.lat)||!isFinite(f.lon)) continue;
 
-    const override = priceOverrides?.[f.id]?.[product];
-    const base = isFinite(override) ? override : f.base[product];
-    if(!isFinite(base) || base <= 0) continue;
+      const kmAir = haversineKm(origin.lat, origin.lon, f.lat, f.lon);
+      if(kmAir > radiusKm) continue;
 
-    const freightPerT = (kmAir * freightPerKm / qtyT) * factor;
-    const deliveredPerT = base + freightPerT;
-    const deliveredTotal = deliveredPerT * qtyT;
+      const override = priceOverrides?.[f.id]?.[product];
+      const base = isFinite(override) ? override : f.base[product];
+      if(!isFinite(base) || base <= 0) continue;
 
-    let marginPerT = null;
-    if(isFinite(targetVk)) marginPerT = targetVk - deliveredPerT;
+      const freightPerT = (kmAir * freightPerKm / qtyT) * factor;
+      const deliveredPerT = base + freightPerT;
+      const deliveredTotal = deliveredPerT * qtyT;
 
-    results.push({f, kmAir, base, freightPerT, deliveredPerT, deliveredTotal, marginPerT});
+      let marginPerT = null;
+      if(isFinite(targetVk)) marginPerT = targetVk - deliveredPerT;
+
+      results.push({type:"firma", entity:f, kmAir, base, freightPerT, deliveredPerT, deliveredTotal, marginPerT});
+    }
+  }else{
+    // Firm -> Customers (umgedreht)
+    const firm = origin;
+    const overrideFirm = priceOverrides?.[firm.id]?.[product];
+    const baseFirm = isFinite(overrideFirm) ? overrideFirm : firm.base[product];
+
+    for(const c of customers){
+      if(!isFinite(c.lat)||!isFinite(c.lon)) continue;
+
+      if(c.accepts && c.accepts[product] === false) continue;
+
+      const kmAir = haversineKm(firm.lat, firm.lon, c.lat, c.lon);
+      if(kmAir > radiusKm) continue;
+
+      const freightPerT = (kmAir * freightPerKm / qtyT) * factor;
+      const deliveredPerT = baseFirm + freightPerT;
+      const deliveredTotal = deliveredPerT * qtyT;
+
+      let marginPerT = null;
+      if(isFinite(targetVk)) marginPerT = targetVk - deliveredPerT;
+
+      results.push({type:"kunde", entity:c, kmAir, base: baseFirm, freightPerT, deliveredPerT, deliveredTotal, marginPerT});
+    }
   }
 
   results.sort((a,b)=>a.deliveredPerT - b.deliveredPerT);
@@ -1577,7 +1793,7 @@ function calculate(){
   renderMarkers();
 
   if(!results.length){
-    out.innerHTML = `<div class="small">Keine Firmen im Radius / mit gültigem Preis gefunden.</div>`;
+    out.innerHTML = `<div class="small">Keine ${mode==="kunden" ? "Firmen" : "Kunden"} im Radius / mit gültigen Daten gefunden.</div>`;
     return;
   }
 
@@ -1585,7 +1801,7 @@ function calculate(){
   table.innerHTML = `
     <thead>
       <tr>
-        <th>Firma</th>
+        <th>${mode==="kunden" ? "Firma" : "Kunde"}</th>
         <th>KM</th>
         <th>Preis</th>
         <th>${isFinite(targetVk) ? "Marge" : "Info"}</th>
@@ -1596,12 +1812,16 @@ function calculate(){
   const tbody = table.querySelector("tbody");
 
   for(const row of results){
-    const standTxt = row.f.stand ? ` · ${esc(row.f.stand)}` : "";
+    const ent = row.entity;
+
+    const standTxt = (row.type==="firma" && ent.stand) ? ` · ${esc(ent.stand)}` : "";
+    const acceptTxt = (row.type==="kunde" && ent.accepts) ? ` · Annahme: ${productLabel(product)} ✓` : "";
+
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>
-        <b>${esc(row.f.name)}</b><br>
-        <span class="small">${esc(row.f.address)} · Basis ${fmt(row.base)} €/t${standTxt} · Fracht ${fmt(row.freightPerT)} €/t</span>
+        <b>${esc(ent.name)}</b><br>
+        <span class="small">${esc(ent.address)} · Basis ${fmt(row.base)} €/t${standTxt}${acceptTxt} · Fracht ${fmt(row.freightPerT)} €/t</span>
       </td>
       <td>${fmt(row.kmAir,0)}</td>
       <td>
@@ -1612,9 +1832,9 @@ function calculate(){
     `;
 
     tr.addEventListener("click", async ()=>{
-      const routeKm = await drawRouteOSRM(selectedCustomer, row.f);
-      showDetail(row, inputs, routeKm);
-      await copyOfferText(selectedCustomer, row, inputs, routeKm);
+      const routeKm = await drawRouteOSRM_Any(mode, origin, ent);
+      showDetail(mode, origin, row, inputs, routeKm);
+      await copyOfferText(mode, origin, row, inputs, routeKm);
     });
 
     tbody.appendChild(tr);
@@ -1653,9 +1873,12 @@ function clearRoute(){
   if(el) el.textContent = "—";
 }
 
-async function drawRouteOSRM(from, to){
+async function drawRouteOSRM_Any(mode, origin, target){
   clearRoute();
   document.getElementById("kpiRoute").textContent = "lädt…";
+
+  const from = origin;
+  const to = target;
 
   const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson`;
   try{
@@ -1685,14 +1908,15 @@ function kv(k, v){
   return `<div class="kv"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`;
 }
 
-function showDetail(row, inputs, routeKm){
+function showDetail(mode, origin, row, inputs, routeKm){
   const {product, qtyT, freightPerKm, factor, targetVk} = inputs;
 
   const detailBox = document.getElementById("detailBox");
   const title = document.getElementById("detailTitle");
   const grid = document.getElementById("detailGrid");
 
-  title.textContent = `Details: ${row.f.name}`;
+  const ent = row.entity;
+  title.textContent = `Details: ${ent.name}`;
 
   const routeText = (routeKm && isFinite(routeKm)) ? `${fmt(routeKm,1)} km` : "—";
   const airText = `${fmt(row.kmAir,1)} km`;
@@ -1700,11 +1924,17 @@ function showDetail(row, inputs, routeKm){
   const marginPerT = isFinite(targetVk) ? (targetVk - row.deliveredPerT) : NaN;
   const profitTotal = isFinite(marginPerT) ? (marginPerT * qtyT) : NaN;
 
-  const note = (notesStore?.[row.f.id] || "").trim();
+  const note = (notesStore?.[ent.id] || "").trim();
+
+  const originLabel = (mode==="kunden") ? "Kunde" : "Firma";
+  const targetLabel = (mode==="kunden") ? "Firma" : "Kunde";
 
   grid.innerHTML = `
-    ${kv("Adresse", row.f.address)}
-    ${kv("Stand", row.f.stand ? row.f.stand : "—")}
+    ${kv(originLabel, origin.name)}
+    ${kv(originLabel + " Adresse", origin.address)}
+    ${kv(targetLabel, ent.name)}
+    ${kv(targetLabel + " Adresse", ent.address)}
+    ${mode==="kunden" ? kv("Stand (Firma)", ent.stand ? ent.stand : "—") : kv("Stand (Firma)", origin.stand ? origin.stand : "—")}
     ${kv("Produkt", productLabel(product))}
     ${kv("Menge", `${fmt(qtyT,1)} t`)}
     ${kv("Route (km)", routeText)}
@@ -1731,21 +1961,28 @@ function hideDetail(){
 /* =========================
    Copy offer text
    ========================= */
-async function copyOfferText(customer, row, inputs, routeKm){
+async function copyOfferText(mode, origin, row, inputs, routeKm){
   const {product, qtyT, freightPerKm, factor, targetVk} = inputs;
   const marginPerT = isFinite(targetVk) ? (targetVk - row.deliveredPerT) : NaN;
   const profitTotal = isFinite(marginPerT) ? (marginPerT * qtyT) : NaN;
 
+  const target = row.entity;
+
+  const originLabel = (mode==="kunden") ? "Kunde" : "Firma";
+  const targetLabel = (mode==="kunden") ? "Firma" : "Kunde";
+
+  const standFirm = (mode==="kunden") ? (target.stand || "—") : (origin.stand || "—");
+
   const text =
 `Angebots-Vorschlag
-Kunde: ${customer.name}
-Adresse: ${customer.address}
+${originLabel}: ${origin.name}
+Adresse: ${origin.address}
 Produkt: ${productLabel(product)}
 Menge: ${qtyT} t
 
-Firma: ${row.f.name}
-Adresse: ${row.f.address}
-Stand: ${row.f.stand || "—"}
+${targetLabel}: ${target.name}
+Adresse: ${target.address}
+Stand (Firma): ${standFirm}
 Luftlinie: ${row.kmAir.toFixed(1)} km
 Route: ${routeKm && isFinite(routeKm) ? routeKm.toFixed(1) : "—"} km
 
@@ -1815,8 +2052,11 @@ function initPanelDragDesktopOnly(){
 /* =========================
    KPI updates
    ========================= */
-function updateCustomerKpi(c){
-  if(!c){
+function updateOriginKpi(origin){
+  const mode = getSearchType();
+  document.getElementById("kpiOriginLabel").textContent = (mode==="kunden") ? "Kunde" : "Firma";
+
+  if(!origin){
     document.getElementById("kpiCustomer").textContent = "—";
     document.getElementById("kpiCustomerAddr").textContent = "—";
     document.getElementById("kpiCount").textContent = "—";
@@ -1825,9 +2065,12 @@ function updateCustomerKpi(c){
     document.getElementById("ordersBox").style.display = "none";
     return;
   }
-  document.getElementById("kpiCustomer").textContent = c.name || "—";
-  document.getElementById("kpiCustomerAddr").textContent = c.address || "—";
+  document.getElementById("kpiCustomer").textContent = origin.name || "—";
+  document.getElementById("kpiCustomerAddr").textContent = origin.address || "—";
   document.getElementById("kpiRoute").textContent = "—";
+
+  if(mode==="kunden") renderOrdersForCustomer(origin);
+  else renderOrdersForFirm(origin);
 }
 
 /* =========================
