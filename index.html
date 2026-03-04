@@ -45,10 +45,9 @@
       --pill-bg:rgba(148,163,184,.10); --pill-border:rgba(148,163,184,.22);
     }
 
-    html,body{height:100%;margin:0;background:var(--ui-bg); overscroll-behavior: none;}
+    html,body{height:100%;margin:0;background:var(--ui-bg); overscroll-behavior:none;}
     #map{position:absolute; inset:0; width:100%; height:100%; background:#d1d5db;}
 
-    /* TOPBAR */
     .topbar{
       position:fixed; top:0; left:0; right:0; z-index:3000;
       display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;
@@ -63,7 +62,6 @@
       backdrop-filter: blur(6px);
     }
     .brand{font-weight:900; white-space:nowrap; margin-right:4px;}
-
     .field{display:flex; flex-direction:column; gap:4px}
     .field label{font-size:11px; color:var(--ui-muted); margin-left:2px}
     .field input,.field select{
@@ -72,7 +70,7 @@
       background:var(--inp-bg);
       color:var(--inp-text);
       outline:none;
-      min-width: 120px;
+      min-width:120px;
     }
     .field input::placeholder{color:var(--inp-ph)}
     .field input:focus,.field select:focus{border-color:var(--inp-focus); box-shadow:0 0 0 3px rgba(37,99,235,.12)}
@@ -87,6 +85,10 @@
       color:var(--btn-text);
       cursor:pointer;
       font-weight:800;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
     }
     .btn.primary{ background:var(--btn-primary); border-color:var(--btn-primary); color:var(--btn-primary-text); }
     .btn:active{transform:translateY(1px)}
@@ -111,7 +113,6 @@
     .dot.mid{background:var(--mid)}
     .dot.bad{background:var(--bad)}
 
-    /* AUTOCOMPLETE */
     .ac{
       position:absolute; z-index:4000;
       background:var(--ui-bg);
@@ -123,7 +124,7 @@
       color:var(--ui-text);
       max-height:260px;
       overflow:auto;
-      min-width: 320px;
+      min-width:320px;
       display:none;
     }
     .ac .item{padding:10px 12px;border-bottom:1px solid var(--ui-border);cursor:pointer;}
@@ -132,7 +133,6 @@
     .ac .name{font-weight:900}
     .ac .addr{font-size:12px;color:var(--ui-muted);margin-top:2px}
 
-    /* PANEL (Desktop) */
     .panel{
       position:absolute; top:88px; right:12px; z-index:2500;
       width:640px; max-height: calc(100vh - 110px);
@@ -153,7 +153,7 @@
       border-bottom:1px solid var(--ui-border);
       cursor:move;
     }
-    .panel-h .t{font-weight:900}
+    .panel-h .t{font-weight:900; display:flex; align-items:center; gap:10px;}
     .panel-h .x{
       width:30px;height:30px;border-radius:10px;border:1px solid var(--ui-border);
       background:var(--ui-soft2); color:var(--ui-text);
@@ -329,9 +329,6 @@
       cursor:default;
       user-select:none;
     }
-    .panel.mobileSheet .panel-h .t{
-      display:flex; align-items:center; gap:10px;
-    }
     .grab{
       width:44px; height:5px; border-radius:999px;
       background:rgba(148,163,184,.65);
@@ -344,7 +341,6 @@
     }
     .panel.mobileSheet.collapsed .panel-b{display:none;}
 
-    /* Responsive rules */
     @media (max-width: 760px){
       .topbar{
         gap:8px;
@@ -355,8 +351,8 @@
       .topbar .desktopOnly{display:none !important;}
       #btnMenu{display:inline-flex;}
       #loadStatus{margin-left:0;}
-      #miniKpi{display:none;} /* optional: auf Handy ausblenden */
-      .ac{min-width: min(92vw, 420px);}
+      #miniKpi{display:none;}
+      .ac{min-width:min(92vw, 420px);}
       .missPanel{
         left:10px; right:10px; width:auto;
         top:58px;
@@ -368,12 +364,12 @@
 <body>
 <div id="map"></div>
 
-<!-- TOPBAR (Mobile: klein, Rest im Drawer) -->
+<!-- TOPBAR -->
 <div class="topbar" id="topbar">
   <button class="btn" id="btnMenu" title="Menü">☰</button>
   <div class="brand">Verkaufs-Karte</div>
 
-  <!-- Desktop-Controls (bleiben oben) -->
+  <!-- Desktop: Suche oben -->
   <div class="field w240 desktopOnly">
     <label>Kunde suchen</label>
     <input id="custSearch" placeholder="Name / Ort …">
@@ -395,6 +391,32 @@
       <option value="pink">Pink</option>
       <option value="pastel">Pastell</option>
     </select>
+  </div>
+
+  <!-- ✅ Desktop: Eingaben wieder oben -->
+  <div class="field w140 desktopOnly">
+    <label>Radius (km)</label>
+    <input id="radiusKm" type="number" min="0" value="250">
+  </div>
+
+  <div class="field w140 desktopOnly">
+    <label>Menge (t)</label>
+    <input id="qtyT" type="number" min="0.1" step="0.1" value="24">
+  </div>
+
+  <div class="field w140 desktopOnly">
+    <label>Fracht €/km</label>
+    <input id="freightPerKm" type="number" step="0.01" value="1.85">
+  </div>
+
+  <div class="field w140 desktopOnly">
+    <label>Faktor</label>
+    <input id="factor" type="number" step="0.01" value="1.05" min="0" max="10">
+  </div>
+
+  <div class="field w140 desktopOnly">
+    <label>Ziel-VK €/t</label>
+    <input id="targetVk" type="number" step="0.01" placeholder="optional">
   </div>
 
   <button class="btn" id="btnTheme" title="Hell/Dunkel umschalten">🌙</button>
@@ -429,7 +451,6 @@
 
     <div class="field">
       <label>Produkt</label>
-      <!-- wird per JS gespiegelt (nutzt das gleiche select #product) -->
       <select id="productMobile"></select>
     </div>
 
@@ -438,29 +459,30 @@
       <select id="colorSchemeMobile"></select>
     </div>
 
+    <!-- ✅ Mobile IDs (keine Doppel-IDs!) -->
     <div class="field">
       <label>Radius (km)</label>
-      <input id="radiusKm" type="number" min="0" value="250">
+      <input id="radiusKmMobile" type="number" min="0" value="250">
     </div>
 
     <div class="field">
       <label>Menge (t)</label>
-      <input id="qtyT" type="number" min="0.1" step="0.1" value="24">
+      <input id="qtyTMobile" type="number" min="0.1" step="0.1" value="24">
     </div>
 
     <div class="field">
       <label>Fracht €/km</label>
-      <input id="freightPerKm" type="number" step="0.01" value="1.85">
+      <input id="freightPerKmMobile" type="number" step="0.01" value="1.85">
     </div>
 
     <div class="field">
       <label>Faktor</label>
-      <input id="factor" type="number" step="0.01" value="1.05" min="0" max="10">
+      <input id="factorMobile" type="number" step="0.01" value="1.05" min="0" max="10">
     </div>
 
     <div class="field">
       <label>Ziel-VK €/t</label>
-      <input id="targetVk" type="number" step="0.01" placeholder="optional">
+      <input id="targetVkMobile" type="number" step="0.01" placeholder="optional">
     </div>
 
     <div class="drawerActions">
@@ -469,7 +491,7 @@
     </div>
   </div>
 
-  <div class="small">Tip: Panel unten antippen = ein/ausklappen.</div>
+  <div class="small">Tip: Ergebnis-Panel unten antippen = ein/ausklappen.</div>
 </aside>
 
 <!-- Missing -->
@@ -628,7 +650,6 @@ let deliveriesByCustomer = new Map();
 let geoCache = loadLS(LS_GEO_CACHE_KEY, {});
 let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
 let notesStore = loadLS(LS_NOTES_KEY, {});
-
 let isMobile = false;
 
 /* =========================
@@ -641,7 +662,6 @@ window.addEventListener("load", ()=>init().catch(err=>{
 
 async function init(){
   applyThemeFromLS();
-
   if(!window.L) throw new Error("Leaflet (L) nicht geladen. Prüfe Internet/CSP/Script-URL.");
 
   map = L.map('map', { worldCopyJump:true }).setView([51.2, 10.4], 6);
@@ -658,15 +678,10 @@ async function init(){
   initMissingUI();
   initMobileUI();
   applyResponsiveLayout();
-
-  window.addEventListener("resize", ()=>{
-    applyResponsiveLayout();
-  });
+  window.addEventListener("resize", applyResponsiveLayout);
 
   map.on("click", ()=>{
-    // auf Handy: Drawer zu, damit Karte frei ist
     closeDrawer();
-    // optional: Route + Detail wie vorher
     clearRoute();
     hideDetail();
   });
@@ -690,15 +705,11 @@ function applyResponsiveLayout(){
   const panel = document.getElementById("panel");
   panel.classList.toggle("mobileSheet", isMobile);
 
-  // Desktop Drag nur auf Desktop sinnvoll
   if(isMobile){
-    // Panel standardmäßig einklappbar per Tap
-    // (Position-Storage wird ignoriert auf Mobile)
     panel.style.left = "";
     panel.style.top = "";
     panel.style.right = "";
   }else{
-    // beim Wechsel auf Desktop: gespeicherte Position wieder (wenn vorhanden)
     const pos = loadLS(LS_PANEL_POS_KEY, null);
     if(pos && isFinite(pos.x) && isFinite(pos.y)){
       panel.style.left = pos.x+"px";
@@ -744,15 +755,21 @@ function initMobileUI(){
   btnClose.addEventListener("click", ()=>closeDrawer());
   backdrop.addEventListener("click", ()=>closeDrawer());
 
-  // Spiegeln der Selects (mobile nutzt die gleichen Werte wie desktop)
+  // Master-selects auf Desktop (werden auf Handy versteckt, existieren aber)
   syncMobileSelect("product", "productMobile");
   syncMobileSelect("colorScheme", "colorSchemeMobile");
 
-  // Mobile search benutzt die gleiche Logik wie Desktop: wir leiten Events auf #custSearch um
+  // ✅ Inputs sync (Desktop <-> Mobile)
+  syncMobileInput("radiusKm", "radiusKmMobile");
+  syncMobileInput("qtyT", "qtyTMobile");
+  syncMobileInput("freightPerKm", "freightPerKmMobile");
+  syncMobileInput("factor", "factorMobile");
+  syncMobileInput("targetVk", "targetVkMobile");
+
+  // Search: Mobile Feld steuert Master #custSearch (Autocomplete sitzt dort)
   const desktopSearch = document.getElementById("custSearch");
   const mobileSearch  = document.getElementById("custSearchMobile");
 
-  // wenn Desktop-Feld auf Mobile ausgeblendet ist, existiert es trotzdem — wir nutzen es als "Master"
   mobileSearch.addEventListener("focus", ()=>{
     desktopSearch.value = mobileSearch.value;
     desktopSearch.dispatchEvent(new Event("focus"));
@@ -766,7 +783,6 @@ function initMobileUI(){
     desktopSearch.dispatchEvent(new KeyboardEvent("keydown", {key:e.key}));
   });
 
-  // Calc + Geo Buttons in Drawer
   document.getElementById("btnCalcMobile").addEventListener("click", ()=>{
     closeDrawer();
     calculate();
@@ -776,10 +792,9 @@ function initMobileUI(){
     await geocodeAll();
   });
 
-  // Panel: auf Mobile antippen = collapse toggle
+  // Bottom sheet: tap header = collapse
   const header = document.getElementById("panelHeader");
   header.addEventListener("click", (e)=>{
-    // nicht wenn man auf X drückt
     if(e.target && (e.target.id === "closePanel")) return;
     if(!isMobile) return;
     document.getElementById("panel").classList.toggle("collapsed");
@@ -796,12 +811,29 @@ function syncMobileSelect(masterId, mobileId){
   }
   copyOptions();
 
-  master.addEventListener("change", ()=>{
-    copyOptions();
-  });
+  master.addEventListener("change", ()=>copyOptions());
   mobile.addEventListener("change", ()=>{
     master.value = mobile.value;
     master.dispatchEvent(new Event("change"));
+  });
+}
+
+function syncMobileInput(masterId, mobileId){
+  const master = document.getElementById(masterId);
+  const mobile = document.getElementById(mobileId);
+  if(!master || !mobile) return;
+
+  // initial sync
+  mobile.value = master.value;
+
+  // Desktop -> Mobile
+  master.addEventListener("input", ()=>{
+    if(mobile.value !== master.value) mobile.value = master.value;
+  });
+
+  // Mobile -> Desktop
+  mobile.addEventListener("input", ()=>{
+    if(master.value !== mobile.value) master.value = mobile.value;
   });
 }
 
@@ -1286,8 +1318,9 @@ function openFirmPriceAndNotePopup(firm, latlng){
    UI + Autocomplete
    ========================= */
 function initUI(){
-  // Buttons
-  document.getElementById("btnGeo").addEventListener("click", geocodeAll);
+  const btnGeo = document.getElementById("btnGeo");
+  if(btnGeo) btnGeo.addEventListener("click", geocodeAll);
+
   document.getElementById("btnCalc").addEventListener("click", calculate);
 
   document.getElementById("btnTheme").addEventListener("click", ()=>{
@@ -1316,15 +1349,13 @@ function initUI(){
     setTimeout(()=>map.invalidateSize(), 50);
   });
 
-  // Autocomplete is based on the DESKTOP input as "Master"
+  // Autocomplete master is #custSearch
   const input = document.getElementById("custSearch");
   const ac = document.getElementById("ac");
 
   function positionAC(){
-    // Wenn auf Mobile das mobile Feld aktiv ist, positioniere trotzdem unter dem aktiven Feld
     const mobileInput = document.getElementById("custSearchMobile");
     const active = (document.activeElement === mobileInput) ? mobileInput : input;
-
     const r = active.getBoundingClientRect();
     ac.style.left = (r.left + window.scrollX) + "px";
     ac.style.top  = (r.bottom + window.scrollY + 8) + "px";
@@ -1349,7 +1380,6 @@ function initUI(){
   });
 
   document.addEventListener("click", (e)=>{
-    // nicht schließen, wenn man im drawer auf autocomplete klickt
     if(ac.contains(e.target)) return;
     const mobileInput = document.getElementById("custSearchMobile");
     if(e.target === input || e.target === mobileInput) return;
@@ -1387,7 +1417,6 @@ function initUI(){
       div.addEventListener("click", ()=>{
         selectCustomer(c);
         ac.style.display="none";
-        // drawer auf mobile direkt schließen, damit Karte frei ist
         closeDrawer();
       });
       ac.appendChild(div);
@@ -1421,10 +1450,9 @@ function selectCustomer(c){
 
   const panel = document.getElementById("panel");
   panel.classList.remove("hidden");
-  if(isMobile) panel.classList.remove("collapsed"); // auf mobile öffnen
+  if(isMobile) panel.classList.remove("collapsed");
 
   setTimeout(()=>map.invalidateSize(), 50);
-
   renderMarkers();
 }
 
@@ -1760,7 +1788,7 @@ function initPanelDragDesktopOnly(){
 
   let dragging=false, sx=0, sy=0, sl=0, st=0;
   header.addEventListener("mousedown",(e)=>{
-    if(window.matchMedia("(max-width: 760px)").matches) return; // no drag on mobile
+    if(window.matchMedia("(max-width: 760px)").matches) return;
     dragging=true;
     const r = panel.getBoundingClientRect();
     sx=e.clientX; sy=e.clientY; sl=r.left; st=r.top;
