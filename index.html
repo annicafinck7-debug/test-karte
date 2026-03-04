@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
   <title>Verkaufs-Karte – Kunden & Firmen</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -45,9 +45,10 @@
       --pill-bg:rgba(148,163,184,.10); --pill-border:rgba(148,163,184,.22);
     }
 
-    html,body{height:100%;margin:0;background:var(--ui-bg)}
+    html,body{height:100%;margin:0;background:var(--ui-bg); overscroll-behavior: none;}
     #map{position:absolute; inset:0; width:100%; height:100%; background:#d1d5db;}
 
+    /* TOPBAR */
     .topbar{
       position:fixed; top:0; left:0; right:0; z-index:3000;
       display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;
@@ -62,6 +63,7 @@
       backdrop-filter: blur(6px);
     }
     .brand{font-weight:900; white-space:nowrap; margin-right:4px;}
+
     .field{display:flex; flex-direction:column; gap:4px}
     .field label{font-size:11px; color:var(--ui-muted); margin-left:2px}
     .field input,.field select{
@@ -109,6 +111,7 @@
     .dot.mid{background:var(--mid)}
     .dot.bad{background:var(--bad)}
 
+    /* AUTOCOMPLETE */
     .ac{
       position:absolute; z-index:4000;
       background:var(--ui-bg);
@@ -129,6 +132,7 @@
     .ac .name{font-weight:900}
     .ac .addr{font-size:12px;color:var(--ui-muted);margin-top:2px}
 
+    /* PANEL (Desktop) */
     .panel{
       position:absolute; top:88px; right:12px; z-index:2500;
       width:640px; max-height: calc(100vh - 110px);
@@ -261,21 +265,121 @@
     .missRow b{display:block; font-size:13px}
     .missRow .r{opacity:.85; font-size:12px; margin-top:2px}
     .missRow .m{opacity:.65; font-size:11px; margin-top:4px; white-space:pre-wrap}
+
+    /* =========================
+       MOBILE UI: Drawer + Bottom Sheet
+       ========================= */
+    #btnMenu{display:none;}
+    .drawerBackdrop{
+      position:fixed; inset:0; z-index:4500;
+      background:rgba(0,0,0,.38);
+      backdrop-filter: blur(2px);
+      display:none;
+    }
+    .drawer{
+      position:fixed; top:0; bottom:0; left:0; z-index:5000;
+      width:min(360px, 88vw);
+      background:var(--ui-bg);
+      border-right:1px solid var(--ui-border);
+      box-shadow: 18px 0 40px rgba(0,0,0,.22);
+      transform:translateX(-102%);
+      transition: transform .22s ease;
+      display:flex; flex-direction:column;
+      padding:12px;
+      gap:10px;
+      overflow:auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .drawer.open{transform:translateX(0);}
+    .drawerTop{
+      display:flex; align-items:center; justify-content:space-between;
+      padding-bottom:8px; border-bottom:1px solid var(--ui-border);
+    }
+    .drawerTitle{font-weight:900}
+    .drawerClose{
+      width:34px;height:34px;border-radius:12px;border:1px solid var(--ui-border);
+      background:var(--ui-soft2); color:var(--ui-text);
+      cursor:pointer; font-weight:900;
+    }
+    .drawerGrid{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:10px;
+      padding-bottom:12px;
+    }
+    .drawerActions{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:10px;
+      padding-top:8px;
+      border-top:1px solid var(--ui-border);
+    }
+
+    /* Mobile bottom sheet */
+    .panel.mobileSheet{
+      position:fixed;
+      left:10px; right:10px;
+      top:auto; bottom:10px;
+      width:auto;
+      max-height:72vh;
+      border-radius:18px;
+      z-index:5200;
+    }
+    .panel.mobileSheet .panel-h{
+      cursor:default;
+      user-select:none;
+    }
+    .panel.mobileSheet .panel-h .t{
+      display:flex; align-items:center; gap:10px;
+    }
+    .grab{
+      width:44px; height:5px; border-radius:999px;
+      background:rgba(148,163,184,.65);
+      display:none;
+    }
+    .panel.mobileSheet .grab{display:inline-block;}
+    .panel.mobileSheet.collapsed{
+      max-height:54px;
+      overflow:hidden;
+    }
+    .panel.mobileSheet.collapsed .panel-b{display:none;}
+
+    /* Responsive rules */
+    @media (max-width: 760px){
+      .topbar{
+        gap:8px;
+        padding:8px 10px;
+        align-items:center;
+      }
+      .topbar .brand{font-size:14px}
+      .topbar .desktopOnly{display:none !important;}
+      #btnMenu{display:inline-flex;}
+      #loadStatus{margin-left:0;}
+      #miniKpi{display:none;} /* optional: auf Handy ausblenden */
+      .ac{min-width: min(92vw, 420px);}
+      .missPanel{
+        left:10px; right:10px; width:auto;
+        top:58px;
+      }
+    }
   </style>
 </head>
 
 <body>
 <div id="map"></div>
 
+<!-- TOPBAR (Mobile: klein, Rest im Drawer) -->
 <div class="topbar" id="topbar">
+  <button class="btn" id="btnMenu" title="Menü">☰</button>
   <div class="brand">Verkaufs-Karte</div>
 
-  <div class="field w240">
+  <!-- Desktop-Controls (bleiben oben) -->
+  <div class="field w240 desktopOnly">
     <label>Kunde suchen</label>
     <input id="custSearch" placeholder="Name / Ort …">
   </div>
 
-  <div class="field w140">
+  <div class="field w140 desktopOnly">
     <label>Produkt</label>
     <select id="product">
       <option value="lose">Lose</option>
@@ -284,7 +388,7 @@
     </select>
   </div>
 
-  <div class="field w140">
+  <div class="field w140 desktopOnly">
     <label>Farbschema</label>
     <select id="colorScheme">
       <option value="standard">Standard</option>
@@ -293,50 +397,82 @@
     </select>
   </div>
 
-  <div class="field w110">
-    <label>UI</label>
-    <button class="btn" id="btnTheme" title="Hell/Dunkel umschalten">🌙</button>
-  </div>
-
-  <div class="field w140">
-    <label>Radius (km)</label>
-    <input id="radiusKm" type="number" min="0" value="250">
-  </div>
-
-  <div class="field w140">
-    <label>Menge (t)</label>
-    <input id="qtyT" type="number" min="0.1" step="0.1" value="24">
-  </div>
-
-  <div class="field w140">
-    <label>Fracht €/km</label>
-    <input id="freightPerKm" type="number" step="0.01" value="1.85">
-  </div>
-
-  <div class="field w140">
-    <label>Faktor</label>
-    <input id="factor" type="number" step="0.01" value="1.05" min="0" max="10">
-  </div>
-
-  <div class="field w140">
-    <label>Ziel-VK €/t</label>
-    <input id="targetVk" type="number" step="0.01" placeholder="optional">
-  </div>
-
+  <button class="btn" id="btnTheme" title="Hell/Dunkel umschalten">🌙</button>
   <button class="btn primary" id="btnCalc">Berechnen</button>
-  <button class="btn" id="btnGeo">Geocoden</button>
+  <button class="btn desktopOnly" id="btnGeo">Geocoden</button>
 
   <div class="pill" id="loadStatus" title="Klicken: nicht geladene Einträge anzeigen"><span class="dot"></span> —</div>
 
-  <div class="pill" id="miniKpi" title="Schnellübersicht (nur wenn Ziel-VK gesetzt)">
+  <div class="pill desktopOnly" id="miniKpi" title="Schnellübersicht (nur wenn Ziel-VK gesetzt)">
     <span class="dot good"></span><span id="miniGood">0</span>
     <span class="dot mid"></span><span id="miniMid">0</span>
     <span class="dot bad"></span><span id="miniBad">0</span>
   </div>
 </div>
 
+<!-- Autocomplete -->
 <div id="ac" class="ac"></div>
 
+<!-- Mobile Drawer -->
+<div id="drawerBackdrop" class="drawerBackdrop"></div>
+<aside id="drawer" class="drawer" aria-hidden="true">
+  <div class="drawerTop">
+    <div class="drawerTitle">Filter & Einstellungen</div>
+    <button class="drawerClose" id="drawerClose" title="Schließen">✕</button>
+  </div>
+
+  <div class="drawerGrid">
+    <div class="field">
+      <label>Kunde suchen</label>
+      <input id="custSearchMobile" placeholder="Name / Ort …">
+    </div>
+
+    <div class="field">
+      <label>Produkt</label>
+      <!-- wird per JS gespiegelt (nutzt das gleiche select #product) -->
+      <select id="productMobile"></select>
+    </div>
+
+    <div class="field">
+      <label>Farbschema</label>
+      <select id="colorSchemeMobile"></select>
+    </div>
+
+    <div class="field">
+      <label>Radius (km)</label>
+      <input id="radiusKm" type="number" min="0" value="250">
+    </div>
+
+    <div class="field">
+      <label>Menge (t)</label>
+      <input id="qtyT" type="number" min="0.1" step="0.1" value="24">
+    </div>
+
+    <div class="field">
+      <label>Fracht €/km</label>
+      <input id="freightPerKm" type="number" step="0.01" value="1.85">
+    </div>
+
+    <div class="field">
+      <label>Faktor</label>
+      <input id="factor" type="number" step="0.01" value="1.05" min="0" max="10">
+    </div>
+
+    <div class="field">
+      <label>Ziel-VK €/t</label>
+      <input id="targetVk" type="number" step="0.01" placeholder="optional">
+    </div>
+
+    <div class="drawerActions">
+      <button class="btn primary" id="btnCalcMobile">Berechnen</button>
+      <button class="btn" id="btnGeoMobile">Geocoden</button>
+    </div>
+  </div>
+
+  <div class="small">Tip: Panel unten antippen = ein/ausklappen.</div>
+</aside>
+
+<!-- Missing -->
 <div id="missPanel" class="missPanel hidden">
   <div class="missHead">
     <div><b>Nicht geladene Einträge</b><span id="missSummary" class="missSummary"></span></div>
@@ -351,9 +487,10 @@
   <div id="missBody" class="missBody"></div>
 </div>
 
-<div id="panel" class="panel">
-  <div id="panelHeader" class="panel-h">
-    <div class="t">Ergebnisse</div>
+<!-- Results Panel -->
+<div id="panel" class="panel hidden">
+  <div id="panelHeader" class="panel-h" title="Antippen: ein/ausklappen (mobil)">
+    <div class="t"><span class="grab"></span> Ergebnisse</div>
     <button id="closePanel" class="x" title="Schließen">✕</button>
   </div>
   <div class="panel-b">
@@ -492,6 +629,8 @@ let geoCache = loadLS(LS_GEO_CACHE_KEY, {});
 let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
 let notesStore = loadLS(LS_NOTES_KEY, {});
 
+let isMobile = false;
+
 /* =========================
    Init
    ========================= */
@@ -503,7 +642,6 @@ window.addEventListener("load", ()=>init().catch(err=>{
 async function init(){
   applyThemeFromLS();
 
-  // ✅ wenn Leaflet nicht geladen ist: lieber sofort sichtbar crashen
   if(!window.L) throw new Error("Leaflet (L) nicht geladen. Prüfe Internet/CSP/Script-URL.");
 
   map = L.map('map', { worldCopyJump:true }).setView([51.2, 10.4], 6);
@@ -515,11 +653,20 @@ async function init(){
 
   setTimeout(()=>map.invalidateSize(), 80);
 
-  initPanelDrag();
+  initPanelDragDesktopOnly();
   initUI();
   initMissingUI();
+  initMobileUI();
+  applyResponsiveLayout();
+
+  window.addEventListener("resize", ()=>{
+    applyResponsiveLayout();
+  });
 
   map.on("click", ()=>{
+    // auf Handy: Drawer zu, damit Karte frei ist
+    closeDrawer();
+    // optional: Route + Detail wie vorher
     clearRoute();
     hideDetail();
   });
@@ -535,6 +682,35 @@ async function init(){
   updateCustomerKpi(null);
   updateLoadStatusCounts("✅ geladen");
   updateMiniKpis({good:0, mid:0, bad:0});
+}
+
+function applyResponsiveLayout(){
+  isMobile = window.matchMedia("(max-width: 760px)").matches;
+
+  const panel = document.getElementById("panel");
+  panel.classList.toggle("mobileSheet", isMobile);
+
+  // Desktop Drag nur auf Desktop sinnvoll
+  if(isMobile){
+    // Panel standardmäßig einklappbar per Tap
+    // (Position-Storage wird ignoriert auf Mobile)
+    panel.style.left = "";
+    panel.style.top = "";
+    panel.style.right = "";
+  }else{
+    // beim Wechsel auf Desktop: gespeicherte Position wieder (wenn vorhanden)
+    const pos = loadLS(LS_PANEL_POS_KEY, null);
+    if(pos && isFinite(pos.x) && isFinite(pos.y)){
+      panel.style.left = pos.x+"px";
+      panel.style.top  = pos.y+"px";
+      panel.style.right = "auto";
+    }else{
+      panel.style.left = "";
+      panel.style.top  = "";
+      panel.style.right = "12px";
+    }
+    panel.classList.remove("collapsed");
+  }
 }
 
 function initMissingUI(){
@@ -553,6 +729,95 @@ function initMissingUI(){
     });
   });
   document.getElementById("missExport")?.addEventListener("click", exportMissingCsv);
+}
+
+/* =========================
+   MOBILE: Drawer wiring
+   ========================= */
+function initMobileUI(){
+  const btnMenu = document.getElementById("btnMenu");
+  const drawer = document.getElementById("drawer");
+  const backdrop = document.getElementById("drawerBackdrop");
+  const btnClose = document.getElementById("drawerClose");
+
+  btnMenu.addEventListener("click", ()=>toggleDrawer());
+  btnClose.addEventListener("click", ()=>closeDrawer());
+  backdrop.addEventListener("click", ()=>closeDrawer());
+
+  // Spiegeln der Selects (mobile nutzt die gleichen Werte wie desktop)
+  syncMobileSelect("product", "productMobile");
+  syncMobileSelect("colorScheme", "colorSchemeMobile");
+
+  // Mobile search benutzt die gleiche Logik wie Desktop: wir leiten Events auf #custSearch um
+  const desktopSearch = document.getElementById("custSearch");
+  const mobileSearch  = document.getElementById("custSearchMobile");
+
+  // wenn Desktop-Feld auf Mobile ausgeblendet ist, existiert es trotzdem — wir nutzen es als "Master"
+  mobileSearch.addEventListener("focus", ()=>{
+    desktopSearch.value = mobileSearch.value;
+    desktopSearch.dispatchEvent(new Event("focus"));
+  });
+  mobileSearch.addEventListener("input", ()=>{
+    desktopSearch.value = mobileSearch.value;
+    desktopSearch.dispatchEvent(new Event("input"));
+  });
+  mobileSearch.addEventListener("keydown", (e)=>{
+    desktopSearch.value = mobileSearch.value;
+    desktopSearch.dispatchEvent(new KeyboardEvent("keydown", {key:e.key}));
+  });
+
+  // Calc + Geo Buttons in Drawer
+  document.getElementById("btnCalcMobile").addEventListener("click", ()=>{
+    closeDrawer();
+    calculate();
+  });
+  document.getElementById("btnGeoMobile").addEventListener("click", async ()=>{
+    closeDrawer();
+    await geocodeAll();
+  });
+
+  // Panel: auf Mobile antippen = collapse toggle
+  const header = document.getElementById("panelHeader");
+  header.addEventListener("click", (e)=>{
+    // nicht wenn man auf X drückt
+    if(e.target && (e.target.id === "closePanel")) return;
+    if(!isMobile) return;
+    document.getElementById("panel").classList.toggle("collapsed");
+  });
+}
+
+function syncMobileSelect(masterId, mobileId){
+  const master = document.getElementById(masterId);
+  const mobile = document.getElementById(mobileId);
+
+  function copyOptions(){
+    mobile.innerHTML = master.innerHTML;
+    mobile.value = master.value;
+  }
+  copyOptions();
+
+  master.addEventListener("change", ()=>{
+    copyOptions();
+  });
+  mobile.addEventListener("change", ()=>{
+    master.value = mobile.value;
+    master.dispatchEvent(new Event("change"));
+  });
+}
+
+function openDrawer(){
+  document.getElementById("drawer").classList.add("open");
+  document.getElementById("drawerBackdrop").style.display = "block";
+  document.getElementById("drawer").setAttribute("aria-hidden","false");
+}
+function closeDrawer(){
+  document.getElementById("drawer").classList.remove("open");
+  document.getElementById("drawerBackdrop").style.display = "none";
+  document.getElementById("drawer").setAttribute("aria-hidden","true");
+}
+function toggleDrawer(){
+  const open = document.getElementById("drawer").classList.contains("open");
+  open ? closeDrawer() : openDrawer();
 }
 
 /* =========================
@@ -1021,6 +1286,7 @@ function openFirmPriceAndNotePopup(firm, latlng){
    UI + Autocomplete
    ========================= */
 function initUI(){
+  // Buttons
   document.getElementById("btnGeo").addEventListener("click", geocodeAll);
   document.getElementById("btnCalc").addEventListener("click", calculate);
 
@@ -1050,14 +1316,19 @@ function initUI(){
     setTimeout(()=>map.invalidateSize(), 50);
   });
 
+  // Autocomplete is based on the DESKTOP input as "Master"
   const input = document.getElementById("custSearch");
   const ac = document.getElementById("ac");
 
   function positionAC(){
-    const r = input.getBoundingClientRect();
+    // Wenn auf Mobile das mobile Feld aktiv ist, positioniere trotzdem unter dem aktiven Feld
+    const mobileInput = document.getElementById("custSearchMobile");
+    const active = (document.activeElement === mobileInput) ? mobileInput : input;
+
+    const r = active.getBoundingClientRect();
     ac.style.left = (r.left + window.scrollX) + "px";
     ac.style.top  = (r.bottom + window.scrollY + 8) + "px";
-    ac.style.minWidth = Math.max(320, r.width) + "px";
+    ac.style.minWidth = Math.max(280, r.width) + "px";
   }
   window.addEventListener("resize", positionAC);
   window.addEventListener("scroll", positionAC, true);
@@ -1078,8 +1349,10 @@ function initUI(){
   });
 
   document.addEventListener("click", (e)=>{
-    if(e.target === input) return;
+    // nicht schließen, wenn man im drawer auf autocomplete klickt
     if(ac.contains(e.target)) return;
+    const mobileInput = document.getElementById("custSearchMobile");
+    if(e.target === input || e.target === mobileInput) return;
     ac.style.display="none";
   });
 
@@ -1114,7 +1387,8 @@ function initUI(){
       div.addEventListener("click", ()=>{
         selectCustomer(c);
         ac.style.display="none";
-        input.blur();
+        // drawer auf mobile direkt schließen, damit Karte frei ist
+        closeDrawer();
       });
       ac.appendChild(div);
     }
@@ -1145,7 +1419,10 @@ function selectCustomer(c){
     map.setView([c.lat,c.lon], Math.max(map.getZoom(), 7), {animate:true});
   }
 
-  document.getElementById("panel").classList.remove("hidden");
+  const panel = document.getElementById("panel");
+  panel.classList.remove("hidden");
+  if(isMobile) panel.classList.remove("collapsed"); // auf mobile öffnen
+
   setTimeout(()=>map.invalidateSize(), 50);
 
   renderMarkers();
@@ -1319,9 +1596,12 @@ function calculate(){
 }
 
 function updateMiniKpis({good, mid, bad}){
-  document.getElementById("miniGood").textContent = String(good ?? 0);
-  document.getElementById("miniMid").textContent  = String(mid ?? 0);
-  document.getElementById("miniBad").textContent  = String(bad ?? 0);
+  const g=document.getElementById("miniGood");
+  const m=document.getElementById("miniMid");
+  const b=document.getElementById("miniBad");
+  if(g) g.textContent = String(good ?? 0);
+  if(m) m.textContent  = String(mid ?? 0);
+  if(b) b.textContent  = String(bad ?? 0);
 }
 
 function makeBadge(row, targetVk){
@@ -1465,9 +1745,9 @@ Fracht €/km: ${freightPerKm} | Faktor: ${factor}`;
 }
 
 /* =========================
-   Panel drag + persist
+   Panel drag (Desktop only)
    ========================= */
-function initPanelDrag(){
+function initPanelDragDesktopOnly(){
   const panel = document.getElementById("panel");
   const header = document.getElementById("panelHeader");
 
@@ -1480,6 +1760,7 @@ function initPanelDrag(){
 
   let dragging=false, sx=0, sy=0, sl=0, st=0;
   header.addEventListener("mousedown",(e)=>{
+    if(window.matchMedia("(max-width: 760px)").matches) return; // no drag on mobile
     dragging=true;
     const r = panel.getBoundingClientRect();
     sx=e.clientX; sy=e.clientY; sl=r.left; st=r.top;
