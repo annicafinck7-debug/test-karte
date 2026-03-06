@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <!-- ✅ Leaflet Draw (Polygon zeichnen) -->
+  <!-- Leaflet Draw -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
   <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 
@@ -33,6 +33,7 @@
       --pill-bg:rgba(15,23,42,.05); --pill-border:rgba(15,23,42,.12);
 
       --good:#16a34a; --mid:#f59e0b; --bad:#dc2626;
+      --route:#2563eb;
     }
 
     body.dark{
@@ -48,6 +49,7 @@
       --popup-bg:#0f172a; --popup-text:#e5e7eb; --popup-border:rgba(148,163,184,.22);
 
       --pill-bg:rgba(148,163,184,.10); --pill-border:rgba(148,163,184,.22);
+      --route:#60a5fa;
     }
 
     html,body{height:100%;margin:0;background:var(--ui-bg); overscroll-behavior:none;}
@@ -153,7 +155,7 @@
 
     .panel{
       position:absolute; top:88px; right:12px; z-index:2500;
-      width:640px; max-height: calc(100vh - 110px);
+      width:660px; max-height: calc(100vh - 110px);
       display:flex; flex-direction:column;
       background:var(--ui-bg);
       border:1px solid var(--ui-border);
@@ -238,7 +240,6 @@
       filter: drop-shadow(0 3px 6px rgba(2,6,23,.25));
     }
 
-    /* Missing Panel (deins) */
     .missPanel{
       position:absolute; right:12px; top:56px; z-index:6000;
       width:440px; max-height:70vh; overflow:hidden;
@@ -278,9 +279,6 @@
     .missRow .r{opacity:.85; font-size:12px; margin-top:2px}
     .missRow .m{opacity:.65; font-size:11px; margin-top:4px; white-space:pre-wrap}
 
-    /* =========================
-       MOBILE UI
-       ========================= */
     #btnMenu{display:none;}
     .drawerBackdrop{
       position:fixed; inset:0; z-index:4500;
@@ -341,7 +339,6 @@
       .missPanel{left:10px; right:10px; width:auto; top:58px;}
     }
 
-    /* ✅ Leaflet draw buttons in theme */
     .leaflet-draw-toolbar a{
       background:var(--ui-bg) !important;
       color:var(--ui-text) !important;
@@ -353,7 +350,6 @@
 <body>
 <div id="map"></div>
 
-<!-- TOPBAR -->
 <div class="topbar" id="topbar">
   <button class="btn" id="btnMenu" title="Menü">☰</button>
 
@@ -388,13 +384,11 @@
     </select>
   </div>
 
-  <!-- ✅ Radius NUR im Kunden-Modus -->
   <div class="field w140 desktopOnly" id="radiusWrapDesktop">
     <label>Radius (km)</label>
     <input id="radiusKm" type="number" min="0" value="250">
   </div>
 
-  <!-- ✅ Zone Buttons NUR im Firmen-Modus -->
   <button class="btn desktopOnly" id="btnZoneDraw" title="Zone zeichnen (Polygon)">✏️ Zone</button>
   <button class="btn desktopOnly" id="btnZoneClear" title="Zone löschen">🧹 Zone</button>
 
@@ -433,7 +427,6 @@
 
 <div id="ac" class="ac"></div>
 
-<!-- Mobile Drawer -->
 <div id="drawerBackdrop" class="drawerBackdrop"></div>
 <aside id="drawer" class="drawer" aria-hidden="true">
   <div class="drawerTop">
@@ -462,13 +455,11 @@
       <select id="colorSchemeMobile"></select>
     </div>
 
-    <!-- ✅ Radius nur im Kunden-Modus (Mobile) -->
     <div class="field" id="radiusWrapMobile">
       <label>Radius (km)</label>
       <input id="radiusKmMobile" type="number" min="0" value="250">
     </div>
 
-    <!-- ✅ Zone Buttons nur im Firmen-Modus (Mobile) -->
     <div class="drawerActions" id="zoneActionsMobile" style="display:none;">
       <button class="btn" id="btnZoneDrawMobile">✏️ Zone</button>
       <button class="btn" id="btnZoneClearMobile">🧹 Zone</button>
@@ -503,7 +494,6 @@
   <div class="small">Tip: Ergebnis-Panel unten antippen = ein/ausklappen.</div>
 </aside>
 
-<!-- Missing -->
 <div id="missPanel" class="missPanel hidden">
   <div class="missHead">
     <div><b>Nicht geladene Einträge</b><span id="missSummary" class="missSummary"></span></div>
@@ -518,7 +508,6 @@
   <div id="missBody" class="missBody"></div>
 </div>
 
-<!-- Results Panel -->
 <div id="panel" class="panel hidden">
   <div id="panelHeader" class="panel-h" title="Antippen: ein/ausklappen (mobil)">
     <div class="t"><span class="grab"></span> Ergebnisse</div>
@@ -539,7 +528,7 @@
       <div class="kpi">
         <div class="h">Routing</div>
         <div class="v" id="kpiRoute">—</div>
-        <div class="small">Klick auf Zeile lädt Route</div>
+        <div class="small">Klick auf Zeile oder Marker lädt Route</div>
       </div>
     </div>
 
@@ -554,8 +543,8 @@
     </div>
 
     <div class="small" style="margin:6px 0 10px 0">
-      <b>Modus Kunden:</b> Kunde auswählen → Firmen-Vorschläge (Radius).
-      <br><b>Modus Firmen:</b> Firma auswählen → Kunden-Vorschläge (Zone/Polygon).
+      <b>Modus Kunden:</b> Kunde auswählen → Firmen-Vorschläge (Radius als Vorfilter, Berechnung mit Strecke).
+      <br><b>Modus Firmen:</b> Firma auswählen → Kunden-Vorschläge (Zone/Polygon, Berechnung mit Strecke).
     </div>
 
     <div id="results"></div>
@@ -583,7 +572,8 @@ const CONFIG = {
   firmsCsvUrl: "https://docs.google.com/spreadsheets/d/1f1oD1TlYWPRbD12d05yIGkqmXVygVt3ZHLk9U0bKoTs/gviz/tq?tqx=out:csv&gid=0",
   customersCsvUrl: "https://docs.google.com/spreadsheets/d/1DaiLyZbhJkdSQ1PHbJQmguIrDnGrrhiAVgJC4PJO8vA/gviz/tq?tqx=out:csv&gid=0",
   deliveriesCsvUrl: "https://docs.google.com/spreadsheets/d/1fcvlM2BUDpoV-HDyPtgDf_1ZqWql6MdEMbisR0eqYYw/gviz/tq?tqx=out:csv&gid=0",
-  geocodeDelayMs: 1100
+  geocodeDelayMs: 1100,
+  routeTimeoutMs: 12000
 };
 
 const LS_GEO_CACHE_KEY = "salesMap_geoCache_v11";
@@ -592,12 +582,11 @@ const LS_PANEL_POS_KEY = "salesMap_panelPos_v11";
 const LS_COLOR_SCHEME_KEY = "salesMap_colorScheme_v6";
 const LS_THEME_KEY = "salesMap_theme_v5";
 const LS_NOTES_KEY = "salesMap_notes_v1";
-
-/* ✅ Zone LocalStorage */
 const LS_ZONE_GEOJSON_KEY = "salesMap_zone_geojson_v1";
+const LS_ROUTE_CACHE_KEY = "salesMap_routeCache_v3";
 
 /* =========================
-   Missing tracking (deins)
+   Missing tracking
    ========================= */
 const missing = { firmen: [], kunden: [], auftraege: [] };
 let activeMissTab = "firmen";
@@ -653,6 +642,9 @@ function exportMissingCsv(){
    ========================= */
 let map, customers=[], firms=[];
 let customerMarkers=[], firmMarkers=[];
+let customerMarkerMap = new Map();
+let firmMarkerMap = new Map();
+
 let selectedCustomer=null;
 let selectedFirm=null;
 let routeLayer=null;
@@ -665,12 +657,16 @@ let deliveriesByFirm = new Map();
 let geoCache = loadLS(LS_GEO_CACHE_KEY, {});
 let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
 let notesStore = loadLS(LS_NOTES_KEY, {});
+let routeCache = loadLS(LS_ROUTE_CACHE_KEY, {});
 let isMobile = false;
 
-/* ✅ Zone state */
-let zoneGroup = null;      // FeatureGroup
-let zoneLayer = null;      // Polygon layer (single)
+let zoneGroup = null;
+let zoneLayer = null;
 let drawControl = null;
+
+let lastResults = [];
+let lastOrigin = null;
+let lastCalculateRunId = 0;
 
 /* =========================
    Init
@@ -693,7 +689,7 @@ async function init(){
 
   setTimeout(()=>map.invalidateSize(), 80);
 
-  initZoneTools();         // ✅ Zone init
+  initZoneTools();
   initPanelDragDesktopOnly();
   initUI();
   initMissingUI();
@@ -703,8 +699,6 @@ async function init(){
 
   map.on("click", ()=>{
     closeDrawer();
-    clearRoute();
-    hideDetail();
   });
 
   setLoadStatus("Lade Tabellen …");
@@ -718,8 +712,6 @@ async function init(){
   updateOriginKpi(null);
   updateLoadStatusCounts("✅ geladen");
   updateMiniKpis({good:0, mid:0, bad:0});
-
-  // ✅ UI Sichtbarkeit richtig setzen
   updateModeUI();
 }
 
@@ -767,13 +759,12 @@ function initMissingUI(){
 }
 
 /* =========================
-   ✅ Zone / Polygon Tools
+   Zone / Polygon Tools
    ========================= */
 function initZoneTools(){
   zoneGroup = new L.FeatureGroup();
   map.addLayer(zoneGroup);
 
-  // draw control (wir starten Zeichnen per Button, aber Control hilft Edit/Remove)
   drawControl = new L.Control.Draw({
     edit: {
       featureGroup: zoneGroup,
@@ -796,7 +787,6 @@ function initZoneTools(){
   map.addControl(drawControl);
 
   map.on(L.Draw.Event.CREATED, (e)=>{
-    // nur 1 Zone gleichzeitig
     zoneGroup.clearLayers();
     zoneLayer = e.layer;
     zoneGroup.addLayer(zoneLayer);
@@ -804,7 +794,6 @@ function initZoneTools(){
   });
 
   map.on(L.Draw.Event.EDITED, ()=>{
-    // wenn editiert -> speichern
     zoneLayer = getFirstZoneLayer();
     saveZoneToLS();
   });
@@ -814,7 +803,6 @@ function initZoneTools(){
     saveLS(LS_ZONE_GEOJSON_KEY, null);
   });
 
-  // beim Laden: Zone aus LS wiederherstellen
   const gj = loadLS(LS_ZONE_GEOJSON_KEY, null);
   if(gj && gj.type){
     try{
@@ -827,12 +815,10 @@ function initZoneTools(){
     }catch(e){}
   }
 }
-
 function getFirstZoneLayer(){
   const layers = zoneGroup.getLayers();
   return layers && layers.length ? layers[0] : null;
 }
-
 function saveZoneToLS(){
   if(!zoneLayer){
     saveLS(LS_ZONE_GEOJSON_KEY, null);
@@ -843,22 +829,16 @@ function saveZoneToLS(){
     saveLS(LS_ZONE_GEOJSON_KEY, gj);
   }catch(e){}
 }
-
 function startDrawZone(){
-  // startet den Polygon-Draw-Modus
   const drawer = new L.Draw.Polygon(map, drawControl.options.draw.polygon);
   drawer.enable();
 }
-
 function clearZone(){
   zoneGroup.clearLayers();
   zoneLayer = null;
   saveLS(LS_ZONE_GEOJSON_KEY, null);
 }
-
-/* Punkt-in-Polygon (Ray casting) */
 function pointInPolygon(lat, lon, latlngs){
-  // latlngs: array von LatLng (ohne holes)
   let inside = false;
   for(let i=0, j=latlngs.length-1; i<latlngs.length; j=i++){
     const xi = latlngs[i].lat, yi = latlngs[i].lng;
@@ -869,17 +849,15 @@ function pointInPolygon(lat, lon, latlngs){
   }
   return inside;
 }
-
 function pointInZone(lat, lon){
-  if(!zoneLayer) return true; // keine Zone => alles erlaubt (aber wir zeigen Hinweis)
-  // Leaflet Polygon: getLatLngs() => [ring] oder [[ring],[hole]...]
+  if(!zoneLayer) return true;
   const ll = zoneLayer.getLatLngs();
-  const ring = Array.isArray(ll[0]) ? ll[0] : ll; // outer ring
+  const ring = Array.isArray(ll[0]) ? ll[0] : ll;
   return pointInPolygon(lat, lon, ring);
 }
 
 /* =========================
-   MOBILE: Drawer wiring
+   Mobile drawer
    ========================= */
 function initMobileUI(){
   const btnMenu = document.getElementById("btnMenu");
@@ -925,7 +903,6 @@ function initMobileUI(){
     await geocodeAll();
   });
 
-  // ✅ Zone Buttons mobile
   document.getElementById("btnZoneDrawMobile").addEventListener("click", ()=>{
     closeDrawer();
     startDrawZone();
@@ -941,24 +918,20 @@ function initMobileUI(){
     document.getElementById("panel").classList.toggle("collapsed");
   });
 }
-
 function syncMobileSelect(masterId, mobileId){
   const master = document.getElementById(masterId);
   const mobile = document.getElementById(mobileId);
-
   function copyOptions(){
     mobile.innerHTML = master.innerHTML;
     mobile.value = master.value;
   }
   copyOptions();
-
   master.addEventListener("change", ()=>copyOptions());
   mobile.addEventListener("change", ()=>{
     master.value = mobile.value;
     master.dispatchEvent(new Event("change"));
   });
 }
-
 function syncMobileInput(masterId, mobileId){
   const master = document.getElementById(masterId);
   const mobile = document.getElementById(mobileId);
@@ -973,7 +946,6 @@ function syncMobileInput(masterId, mobileId){
     if(master.value !== mobile.value) master.value = mobile.value;
   });
 }
-
 function openDrawer(){
   document.getElementById("drawer").classList.add("open");
   document.getElementById("drawerBackdrop").style.display = "block";
@@ -1023,7 +995,7 @@ function parseCsv(url){
 }
 
 /* =========================
-   Load Customers/Firms
+   Load data
    ========================= */
 async function loadCustomers(){
   const rows = await parseCsv(CONFIG.customersCsvUrl);
@@ -1258,7 +1230,76 @@ async function geocodeAll(){
 }
 
 /* =========================
-   Markers (minimal: gleich wie vorher)
+   Routing cache + OSRM
+   ========================= */
+function routeKey(lat1, lon1, lat2, lon2){
+  const a = [roundCoord(lat1), roundCoord(lon1), roundCoord(lat2), roundCoord(lon2)].join(",");
+  const b = [roundCoord(lat2), roundCoord(lon2), roundCoord(lat1), roundCoord(lon1)].join(",");
+  return a < b ? a : b;
+}
+function roundCoord(n){ return Number(n).toFixed(5); }
+
+async function getRouteData(lat1, lon1, lat2, lon2){
+  if(!isFinite(lat1)||!isFinite(lon1)||!isFinite(lat2)||!isFinite(lon2)) return null;
+
+  const key = routeKey(lat1, lon1, lat2, lon2);
+  const cached = routeCache[key];
+  if(cached && isFinite(cached.distanceKm)){
+    return cached;
+  }
+
+  const url = `https://router.project-osrm.org/route/v1/driving/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(()=>controller.abort(), CONFIG.routeTimeoutMs);
+
+  try{
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    const data = await res.json();
+
+    if(data && data.routes && data.routes[0]){
+      const r = data.routes[0];
+      const out = {
+        distanceKm: r.distance / 1000,
+        durationMin: r.duration / 60,
+        geometry: r.geometry || null,
+        ts: Date.now()
+      };
+      routeCache[key] = out;
+      saveLS(LS_ROUTE_CACHE_KEY, routeCache);
+      return out;
+    }
+  }catch(e){
+    clearTimeout(timer);
+  }
+
+  return null;
+}
+
+async function drawRouteBetween(a, b){
+  clearRoute();
+  if(!a || !b) return null;
+
+  const route = await getRouteData(a.lat, a.lon, b.lat, b.lon);
+  if(!route || !route.geometry || !Array.isArray(route.geometry.coordinates)) return route || null;
+
+  const latlngs = route.geometry.coordinates.map(([lon, lat]) => [lat, lon]);
+  routeLayer = L.polyline(latlngs, {
+    color: getComputedStyle(document.body).getPropertyValue('--route').trim() || "#2563eb",
+    weight: 5,
+    opacity: 0.9
+  }).addTo(map);
+
+  try{
+    map.fitBounds(routeLayer.getBounds(), {padding:[35,35]});
+  }catch(e){}
+
+  return route;
+}
+
+/* =========================
+   Markers
    ========================= */
 function customerTriangleIcon(){
   return L.divIcon({ html:`<div class="tri"></div>`, className:"", iconSize:[20,18], iconAnchor:[10,18] });
@@ -1278,6 +1319,8 @@ function renderMarkers(){
   customerMarkers.forEach(m=>m.remove());
   firmMarkers.forEach(m=>m.remove());
   customerMarkers=[]; firmMarkers=[];
+  customerMarkerMap = new Map();
+  firmMarkerMap = new Map();
 
   const inputs = getInputs();
   const outline = document.body.classList.contains("dark") ? "rgba(229,231,235,.9)" : "rgba(15,23,42,.9)";
@@ -1285,24 +1328,51 @@ function renderMarkers(){
   customers.forEach(c=>{
     if(!isFinite(c.lat)||!isFinite(c.lon)) return;
     const m = L.marker([c.lat,c.lon], {icon: customerTriangleIcon()}).addTo(map);
-    m.on("click", ()=>{ if(getSearchType()==="kunden") selectCustomer(c); });
+
+    m.on("click", ()=>{
+      if(getSearchType()==="kunden"){
+        selectCustomer(c);
+      }else{
+        if(selectedFirm){
+          const row = findResultByEntityId(c.id);
+          if(row) focusResult(row);
+        }
+      }
+    });
+
     customerMarkers.push(m);
+    customerMarkerMap.set(c.id, m);
   });
 
   firms.forEach(f=>{
     if(!isFinite(f.lat)||!isFinite(f.lon)) return;
     const fill = firmFillColor(f, inputs);
-    const m = L.circleMarker([f.lat,f.lon], {radius:7,color:outline,weight:2,fillColor:fill,fillOpacity:.9}).addTo(map);
-    m.on("click", ()=>{ if(getSearchType()==="firmen") selectFirm(f); });
+    const m = L.circleMarker([f.lat,f.lon], {
+      radius:7,color:outline,weight:2,fillColor:fill,fillOpacity:.9
+    }).addTo(map);
+
+    m.on("click", ()=>{
+      if(getSearchType()==="firmen"){
+        selectFirm(f);
+      }else{
+        if(selectedCustomer){
+          const row = findResultByEntityId(f.id);
+          if(row) focusResult(row);
+        }
+      }
+    });
+
     m.on("contextmenu", (e)=>openFirmPriceAndNotePopup(f, e.latlng));
+
     firmMarkers.push(m);
+    firmMarkerMap.set(f.id, m);
   });
 
   updateLoadStatusCounts();
 }
 
 /* =========================
-   Notiz + Preis Popup (wie vorher)
+   Firm popup
    ========================= */
 function openFirmPriceAndNotePopup(firm, latlng){
   const product = document.getElementById("product").value;
@@ -1359,7 +1429,6 @@ function openFirmPriceAndNotePopup(firm, latlng){
       if(v) notesStore[firm.id] = v;
       else delete notesStore[firm.id];
       saveLS(LS_NOTES_KEY, notesStore);
-      renderMarkers();
     };
 
     ta.addEventListener("keydown",(e)=>{ if(e.key==="Escape") map.closePopup(popup); });
@@ -1371,19 +1440,24 @@ function openFirmPriceAndNotePopup(firm, latlng){
 }
 
 /* =========================
-   UI + Mode switch + Suche
+   UI
    ========================= */
 function initUI(){
   document.getElementById("btnGeo")?.addEventListener("click", geocodeAll);
   document.getElementById("btnCalc").addEventListener("click", calculate);
 
-  // ✅ Zone Buttons desktop
   document.getElementById("btnZoneDraw").addEventListener("click", ()=>startDrawZone());
   document.getElementById("btnZoneClear").addEventListener("click", ()=>clearZone());
 
   document.getElementById("btnTheme").addEventListener("click", ()=>{
     document.body.classList.toggle("dark");
     saveLS(LS_THEME_KEY, document.body.classList.contains("dark") ? "dark" : "light");
+    renderMarkers();
+    if(routeLayer){
+      const origin = getOrigin();
+      const focused = getFocusedDetailEntity();
+      if(origin && focused) focusResult(findResultByEntityId(focused.id), true);
+    }
   });
 
   const schemeSel = document.getElementById("colorScheme");
@@ -1405,12 +1479,14 @@ function initUI(){
     setTimeout(()=>map.invalidateSize(), 50);
   });
 
-  // ✅ Mode change
   document.getElementById("searchType").addEventListener("change", ()=>{
-    clearRoute(); hideDetail();
+    clearRoute();
+    hideDetail();
     document.getElementById("results").innerHTML = "";
     document.getElementById("kpiCount").textContent = "—";
     updateMiniKpis({good:0, mid:0, bad:0});
+    lastResults = [];
+    lastOrigin = null;
 
     if(getSearchType()==="kunden"){
       selectedFirm = null;
@@ -1427,7 +1503,6 @@ function initUI(){
     document.getElementById("ac").style.display="none";
   });
 
-  // ✅ Autocomplete (Kunden/Firmen)
   const input = document.getElementById("custSearch");
   const ac = document.getElementById("ac");
 
@@ -1515,16 +1590,13 @@ function initUI(){
 function updateModeUI(){
   const mode = getSearchType();
 
-  // Desktop: Radius nur bei Kunden
   document.getElementById("radiusWrapDesktop").style.display = (mode==="kunden") ? "" : "none";
   document.getElementById("btnZoneDraw").style.display = (mode==="firmen") ? "" : "none";
   document.getElementById("btnZoneClear").style.display = (mode==="firmen") ? "" : "none";
 
-  // Mobile: Radius nur bei Kunden, Zone Buttons nur bei Firmen
   document.getElementById("radiusWrapMobile").style.display = (mode==="kunden") ? "" : "none";
   document.getElementById("zoneActionsMobile").style.display = (mode==="firmen") ? "grid" : "none";
 
-  // KPI label
   document.getElementById("kpiOriginLabel").textContent = (mode==="kunden") ? "Kunde" : "Firma";
 }
 
@@ -1548,6 +1620,7 @@ function selectCustomer(c){
   selectedCustomer = c;
   selectedFirm = null;
   updateOriginKpi(c);
+  showOrdersForOrigin(c);
 
   if(isFinite(c.lat)&&isFinite(c.lon)){
     map.setView([c.lat,c.lon], Math.max(map.getZoom(), 7), {animate:true});
@@ -1563,6 +1636,7 @@ function selectFirm(f){
   selectedFirm = f;
   selectedCustomer = null;
   updateOriginKpi(f);
+  showOrdersForOrigin(f);
 
   if(isFinite(f.lat)&&isFinite(f.lon)){
     map.setView([f.lat,f.lon], Math.max(map.getZoom(), 7), {animate:true});
@@ -1589,7 +1663,7 @@ function getInputs(){
   };
 }
 
-function calculate(){
+async function calculate(){
   const out = document.getElementById("results");
   out.innerHTML = "";
   hideDetail();
@@ -1605,43 +1679,71 @@ function calculate(){
     return;
   }
 
+  const panel = document.getElementById("panel");
+  panel.classList.remove("hidden");
+  if(isMobile) panel.classList.remove("collapsed");
+
   const inputs = getInputs();
   const {product, radiusKm, qtyT, freightPerKm, factor, targetVk} = inputs;
 
   document.getElementById("kpiQty").textContent = `Menge: ${fmt(qtyT,1)} t`;
-  document.getElementById("kpiRoute").textContent = "—";
+  document.getElementById("kpiRoute").textContent = "Routen werden berechnet …";
+  document.getElementById("kpiCount").textContent = "…";
+  out.innerHTML = `<div class="small">Berechne echte Strecke für alle Treffer …</div>`;
 
+  const runId = ++lastCalculateRunId;
   const results = [];
 
   if(mode==="kunden"){
-    // ✅ Kunden-Modus: Radius-Filter wie vorher
     if(origin.accepts && origin.accepts[product] === false){
       out.innerHTML = `<div class="small">⚠️ <b>${esc(origin.name)}</b> nimmt <b>${esc(productLabel(product))}</b> nicht an.</div>`;
       document.getElementById("kpiCount").textContent = "0";
+      document.getElementById("kpiRoute").textContent = "—";
       return;
     }
 
-    for(const f of firms){
-      if(!isFinite(f.lat)||!isFinite(f.lon)) continue;
-
+    const candidates = firms.filter(f=>{
+      if(!isFinite(f.lat)||!isFinite(f.lon)) return false;
       const kmAir = haversineKm(origin.lat, origin.lon, f.lat, f.lon);
-      if(kmAir > radiusKm) continue;
+      return kmAir <= radiusKm;
+    });
 
+    for(let i=0; i<candidates.length; i++){
+      if(runId !== lastCalculateRunId) return;
+
+      const f = candidates[i];
       const override = priceOverrides?.[f.id]?.[product];
       const base = isFinite(override) ? override : f.base[product];
       if(!isFinite(base) || base <= 0) continue;
 
-      const freightPerT = (kmAir * freightPerKm / qtyT) * factor;
+      document.getElementById("kpiRoute").textContent = `Route ${i+1}/${candidates.length}`;
+
+      const route = await getRouteData(origin.lat, origin.lon, f.lat, f.lon);
+      if(!route || !isFinite(route.distanceKm)) continue;
+
+      const routeKm = route.distanceKm;
+      const freightPerT = (routeKm * freightPerKm / qtyT) * factor;
       const deliveredPerT = base + freightPerT;
       const deliveredTotal = deliveredPerT * qtyT;
 
       let marginPerT = null;
       if(isFinite(targetVk)) marginPerT = targetVk - deliveredPerT;
 
-      results.push({entity:f, kmAir, base, freightPerT, deliveredPerT, deliveredTotal, marginPerT});
+      results.push({
+        entity:f,
+        routeKm,
+        durationMin: route.durationMin,
+        base,
+        freightPerT,
+        deliveredPerT,
+        deliveredTotal,
+        marginPerT,
+        mode,
+        originId: origin.id,
+        targetId: f.id
+      });
     }
   }else{
-    // ✅ Firmen-Modus: Zone-Filter (Polygon). Wenn keine Zone => Hinweis, aber trotzdem alles anzeigen
     const firm = origin;
 
     const overrideFirm = priceOverrides?.[firm.id]?.[product];
@@ -1649,37 +1751,64 @@ function calculate(){
     if(!isFinite(baseFirm) || baseFirm <= 0){
       out.innerHTML = `<div class="small">⚠️ Für <b>${esc(firm.name)}</b> fehlt Basis-Preis für <b>${esc(productLabel(product))}</b>. Rechtsklick Firma → Preis eingeben.</div>`;
       document.getElementById("kpiCount").textContent = "0";
+      document.getElementById("kpiRoute").textContent = "—";
       return;
     }
 
     const zoneActive = !!zoneLayer;
+    const candidates = customers.filter(c=>{
+      if(!isFinite(c.lat)||!isFinite(c.lon)) return false;
+      if(c.accepts && c.accepts[product] === false) return false;
+      if(zoneActive && !pointInZone(c.lat, c.lon)) return false;
+      return true;
+    });
+
     if(!zoneActive){
       out.innerHTML = `<div class="small" style="margin-bottom:10px;">ℹ️ Keine Zone gezeichnet. Tipp: <b>✏️ Zone</b> klicken und Bereich einzeichnen.</div>`;
     }
 
-    for(const c of customers){
-      if(!isFinite(c.lat)||!isFinite(c.lon)) continue;
+    for(let i=0; i<candidates.length; i++){
+      if(runId !== lastCalculateRunId) return;
 
-      if(c.accepts && c.accepts[product] === false) continue;
+      const c = candidates[i];
+      document.getElementById("kpiRoute").textContent = `Route ${i+1}/${candidates.length}`;
 
-      // ✅ Zone filter
-      if(zoneActive && !pointInZone(c.lat, c.lon)) continue;
+      const route = await getRouteData(firm.lat, firm.lon, c.lat, c.lon);
+      if(!route || !isFinite(route.distanceKm)) continue;
 
-      const kmAir = haversineKm(firm.lat, firm.lon, c.lat, c.lon);
-
-      const freightPerT = (kmAir * freightPerKm / qtyT) * factor;
+      const routeKm = route.distanceKm;
+      const freightPerT = (routeKm * freightPerKm / qtyT) * factor;
       const deliveredPerT = baseFirm + freightPerT;
       const deliveredTotal = deliveredPerT * qtyT;
 
       let marginPerT = null;
       if(isFinite(targetVk)) marginPerT = targetVk - deliveredPerT;
 
-      results.push({entity:c, kmAir, base: baseFirm, freightPerT, deliveredPerT, deliveredTotal, marginPerT});
+      results.push({
+        entity:c,
+        routeKm,
+        durationMin: route.durationMin,
+        base: baseFirm,
+        freightPerT,
+        deliveredPerT,
+        deliveredTotal,
+        marginPerT,
+        mode,
+        originId: firm.id,
+        targetId: c.id
+      });
     }
   }
 
+  if(runId !== lastCalculateRunId) return;
+
   results.sort((a,b)=>a.deliveredPerT - b.deliveredPerT);
+
+  lastResults = results;
+  lastOrigin = origin;
+
   document.getElementById("kpiCount").textContent = String(results.length);
+  document.getElementById("kpiRoute").textContent = results.length ? "Bereit" : "—";
 
   updateMiniKpis(countMargins(results, targetVk));
   renderMarkers();
@@ -1689,12 +1818,25 @@ function calculate(){
     return;
   }
 
+  renderResultsTable(results, targetVk);
+
+  const first = results[0];
+  if(first){
+    await focusResult(first, true);
+  }
+}
+
+function renderResultsTable(results, targetVk){
+  const out = document.getElementById("results");
+  const mode = getSearchType();
+  const qtyT = Math.max(0.1, toNum(document.getElementById("qtyT").value) || 24);
+
   const table = document.createElement("table");
   table.innerHTML = `
     <thead>
       <tr>
         <th>${mode==="kunden" ? "Firma" : "Kunde"}</th>
-        <th>KM</th>
+        <th>Strecke</th>
         <th>Preis</th>
         <th>${isFinite(targetVk) ? "Marge" : "Info"}</th>
       </tr>
@@ -1712,18 +1854,26 @@ function calculate(){
         <b>${esc(ent.name)}</b><br>
         <span class="small">${esc(ent.address)} · Basis ${fmt(row.base)} €/t · Fracht ${fmt(row.freightPerT)} €/t</span>
       </td>
-      <td>${fmt(row.kmAir,0)}</td>
+      <td>
+        <b>${fmt(row.routeKm,0)} km</b><br>
+        <span class="small">${fmt(row.durationMin||0,0)} min</span>
+      </td>
       <td>
         <b>${fmt(row.deliveredPerT)} €/t</b><br>
         <span class="small">${fmt(row.deliveredTotal)} € für ${fmt(qtyT,1)} t</span>
       </td>
       <td>${makeBadge(row, targetVk)}</td>
     `;
+    tr.addEventListener("click", ()=>focusResult(row));
     tbody.appendChild(tr);
   }
 
-  // Wenn vorher Hinweis-Box drin war, ist out schon befüllt -> table einfach dranhängen
-  out.appendChild(table);
+  if(out.innerHTML.trim()){
+    out.appendChild(table);
+  }else{
+    out.innerHTML = "";
+    out.appendChild(table);
+  }
 }
 
 function countMargins(results, targetVk){
@@ -1746,7 +1896,7 @@ function updateMiniKpis({good, mid, bad}){
 }
 
 function makeBadge(row, targetVk){
-  if(!isFinite(targetVk)) return `<span class="badge">—</span>`;
+  if(!isFinite(targetVk)) return `<span class="badge">Route aktiv</span>`;
   const m = row.marginPerT;
   if(!isFinite(m)) return `<span class="badge">—</span>`;
   if(m >= 10) return `<span class="badge good">+${fmt(m)} €/t</span>`;
@@ -1755,7 +1905,7 @@ function makeBadge(row, targetVk){
 }
 
 /* =========================
-   Routing + Detail (minimal)
+   Details + Route
    ========================= */
 function clearRoute(){
   if(routeLayer){
@@ -1769,6 +1919,120 @@ function hideDetail(){
   document.getElementById("detailBox").style.display="none";
   document.getElementById("detailGrid").innerHTML="";
   document.getElementById("detailTitle").textContent="Details";
+}
+function findResultByEntityId(id){
+  return lastResults.find(r => r.entity && r.entity.id === id) || null;
+}
+function getFocusedDetailEntity(){
+  const id = document.getElementById("detailBox").dataset.entityId || "";
+  if(!id) return null;
+  return customers.find(x=>x.id===id) || firms.find(x=>x.id===id) || null;
+}
+
+async function focusResult(row, silentMapMove=false){
+  if(!row) return;
+
+  const origin = getOrigin();
+  if(!origin) return;
+
+  const target = row.entity;
+  const route = await drawRouteBetween(origin, target);
+
+  if(route && isFinite(route.distanceKm)){
+    document.getElementById("kpiRoute").textContent =
+      `${fmt(route.distanceKm,0)} km · ${fmt(route.durationMin||0,0)} min`;
+  }else{
+    document.getElementById("kpiRoute").textContent = `${fmt(row.routeKm,0)} km`;
+  }
+
+  showDetail(row);
+  highlightMapPair(origin, target, silentMapMove);
+}
+
+function showDetail(row){
+  const box = document.getElementById("detailBox");
+  const grid = document.getElementById("detailGrid");
+  const title = document.getElementById("detailTitle");
+  const targetVk = toNum(document.getElementById("targetVk").value);
+  const qtyT = Math.max(0.1, toNum(document.getElementById("qtyT").value) || 24);
+  const target = row.entity;
+  const mode = getSearchType();
+
+  title.textContent = `${mode==="kunden" ? "Firma" : "Kunde"}: ${target.name}`;
+  box.dataset.entityId = target.id || "";
+
+  const note = target.id && notesStore[target.id] ? notesStore[target.id] : "";
+  const marginTotal = isFinite(row.marginPerT) ? row.marginPerT * qtyT : NaN;
+
+  grid.innerHTML = `
+    ${kv("Name", esc(target.name))}
+    ${kv("Adresse", esc(target.address))}
+    ${kv("Produkt", esc(productLabel(document.getElementById("product").value)))}
+    ${kv("Strecke", `${fmt(row.routeKm,2)} km`)}
+    ${kv("Fahrzeit", `${fmt(row.durationMin||0,0)} min`)}
+    ${kv("Basispreis", `${fmt(row.base)} €/t`)}
+    ${kv("Fracht", `${fmt(row.freightPerT)} €/t`)}
+    ${kv("VK / geliefert", `${fmt(row.deliveredPerT)} €/t`)}
+    ${kv("Gesamtpreis", `${fmt(row.deliveredTotal)} €`)}
+    ${kv("Menge", `${fmt(qtyT,1)} t`)}
+    ${kv("Ziel-VK", isFinite(targetVk) ? `${fmt(targetVk)} €/t` : "—")}
+    ${kv("Marge / t", isFinite(row.marginPerT) ? `${fmt(row.marginPerT)} €/t` : "—")}
+    ${kv("Marge gesamt", isFinite(marginTotal) ? `${fmt(marginTotal)} €` : "—")}
+    ${kv("Notiz", note ? esc(note) : "—")}
+  `;
+  box.style.display = "block";
+}
+
+function kv(k, v){
+  return `<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`;
+}
+
+function highlightMapPair(origin, target, silentMapMove=false){
+  const om = origin.id?.startsWith("C") ? customerMarkerMap.get(origin.id) : firmMarkerMap.get(origin.id);
+  const tm = target.id?.startsWith("C") ? customerMarkerMap.get(target.id) : firmMarkerMap.get(target.id);
+
+  if(!silentMapMove){
+    const pts = [];
+    if(om) pts.push(om.getLatLng());
+    if(tm) pts.push(tm.getLatLng());
+    if(pts.length >= 2){
+      map.fitBounds(L.latLngBounds(pts), {padding:[70,70]});
+    }else if(pts.length === 1){
+      map.setView(pts[0], Math.max(map.getZoom(), 7));
+    }
+  }
+}
+
+function showOrdersForOrigin(origin){
+  const box = document.getElementById("ordersBox");
+  const title = document.getElementById("ordersTitle");
+  const listEl = document.getElementById("ordersList");
+
+  if(!origin || !deliveriesLoaded){
+    box.style.display = "none";
+    return;
+  }
+
+  const mode = getSearchType();
+  if(mode === "kunden"){
+    const list = deliveriesByCustomer.get(normText(origin.name)) || [];
+    if(!list.length){
+      box.style.display = "none";
+      return;
+    }
+    title.textContent = `Aufträge zu ${origin.name}`;
+    listEl.innerHTML = list.slice(0,12).map(x=>`• ${esc(x.firma)} — ${fmt(x.anzahl,0)}x`).join("<br>");
+  }else{
+    const list = deliveriesByFirm.get(normText(origin.name)) || [];
+    if(!list.length){
+      box.style.display = "none";
+      return;
+    }
+    title.textContent = `Aufträge zu ${origin.name}`;
+    listEl.innerHTML = list.slice(0,12).map(x=>`• ${esc(x.kunde)} — ${fmt(x.anzahl,0)}x`).join("<br>");
+  }
+
+  box.style.display = "block";
 }
 
 /* =========================
