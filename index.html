@@ -707,12 +707,13 @@ const CONFIG = {
   geocodeDelayMs: 1100
 };
 
-const LS_GEO_CACHE_KEY = "salesMap_geoCache_v19";
-const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v17";
-const LS_PANEL_POS_KEY = "salesMap_panelPos_v17";
-const LS_THEME_KEY = "salesMap_theme_v11";
-const LS_NOTES_KEY = "salesMap_notes_v7";
-const LS_ZONE_GEOJSON_KEY = "salesMap_zone_geojson_v7";
+const LS_GEO_CACHE_KEY = "salesMap_geoCache_v20";
+const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v18";
+const LS_PANEL_POS_KEY = "salesMap_panelPos_v18";
+const LS_THEME_KEY = "salesMap_theme_v12";
+const LS_NOTES_KEY = "salesMap_notes_v8";
+const LS_ZONE_GEOJSON_KEY = "salesMap_zone_geojson_v8";
+const LS_ROUTE_CACHE_KEY = "salesMap_routeCache_v1";
 
 const missing = { firmen: [], kunden: [], auftraege: [] };
 let activeMissTab = "firmen";
@@ -730,6 +731,7 @@ let deliveriesByCustomer = new Map();
 let deliveriesByFirm = new Map();
 
 let geoCache = loadLS(LS_GEO_CACHE_KEY, {});
+let routeCache = loadLS(LS_ROUTE_CACHE_KEY, {});
 let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
 let notesStore = loadLS(LS_NOTES_KEY, {});
 let isMobile = false;
@@ -792,6 +794,45 @@ async function init(){
   updateLoadStatusCounts("✅ geladen");
   updateMiniKpis({good:0, mid:0, bad:0});
   updateModeUI();
+}
+
+function routeCacheKey(from, to){
+  return `${from.lat.toFixed(5)},${from.lon.toFixed(5)}__${to.lat.toFixed(5)},${to.lon.toFixed(5)}`;
+}
+function routeCacheKeyVia(a, w, b){
+  return `${a.lat.toFixed(5)},${a.lon.toFixed(5)}__${w.lat.toFixed(5)},${w.lon.toFixed(5)}__${b.lat.toFixed(5)},${b.lon.toFixed(5)}`;
+}
+function getCachedRoute(from, to){
+  return routeCache[routeCacheKey(from, to)] || null;
+}
+function setCachedRoute(from, to, data){
+  routeCache[routeCacheKey(from, to)] = data;
+  saveLS(LS_ROUTE_CACHE_KEY, routeCache);
+}
+function getCachedRouteVia(a, w, b){
+  return routeCache[routeCacheKeyVia(a, w, b)] || null;
+}
+function setCachedRouteVia(a, w, b, data){
+  routeCache[routeCacheKeyVia(a, w, b)] = data;
+  saveLS(LS_ROUTE_CACHE_KEY, routeCache);
+}
+async function runWithConcurrency(items, limit, worker){
+  const results = new Array(items.length);
+  let index = 0;
+
+  async function next(){
+    while(index < items.length){
+      const current = index++;
+      results[current] = await worker(items[current], current);
+    }
+  }
+
+  const workers = [];
+  for(let i=0; i<Math.min(limit, items.length); i++){
+    workers.push(next());
+  }
+  await Promise.all(workers);
+  return results;
 }
 
 function applyResponsiveLayout(){
@@ -1326,9 +1367,7 @@ function getCustomerAcceptsFromRow(r){
 }
 
 function buildAddressFromParts(parts){
-  const clean = parts
-    .map(v => str(v).trim())
-    .filter(v => v !== "");
+  const clean = parts.map(v => str(v).trim()).filter(v => v !== "");
   return clean.join(", ");
 }
 function buildCustomerAddress(r){
@@ -2130,9 +2169,7 @@ async function calculate(){
     }
   }
 
-  const results = [];
-
-  for(const item of candidates){
+  const results = await runWithConcurrency(candidates, 6, async (item) => {
     const ent = item.entity;
     let route = null;
     let usedKm = NaN;
@@ -2178,7 +2215,7 @@ async function calculate(){
     const deliveredTotal = deliveredPerT * qtyT;
     const marginPerT = isFinite(targetVk) ? (targetVk - deliveredPerT) : NaN;
 
-    results.push({
+    return {
       entity: ent,
       kmAir: usedKm,
       calcKm: usedKm,
@@ -2192,8 +2229,8 @@ async function calculate(){
       deliveredPerT,
       deliveredTotal,
       marginPerT
-    });
-  }
+    };
+  });
 
   results.sort((a,b)=>a.deliveredPerT - b.deliveredPerT);
   lastResults = results;
@@ -2309,6 +2346,9 @@ function hideDetail(){
 }
 
 async function getRouteData(from, to){
+  const cached = getCachedRoute(from, to);
+  if(cached) return cached;
+
   try{
     const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson`;
     const res = await fetch(url);
@@ -2316,11 +2356,13 @@ async function getRouteData(from, to){
 
     if(data && data.routes && data.routes[0]){
       const r = data.routes[0];
-      return {
+      const out = {
         km: r.distance / 1000,
         minutes: r.duration / 60,
         geometry: r.geometry
       };
+      setCachedRoute(from, to, out);
+      return out;
     }
   }catch(e){
     console.error("Routing Fehler:", e);
@@ -2330,6 +2372,9 @@ async function getRouteData(from, to){
 
 async function getRouteDataViaWarehouse(start, warehouse, end){
   if(!warehouse) return null;
+
+  const cached = getCachedRouteVia(start, warehouse, end);
+  if(cached) return cached;
 
   const leg1 = await getRouteData(start, warehouse);
   const leg2 = await getRouteData(warehouse, end);
@@ -2342,7 +2387,7 @@ async function getRouteDataViaWarehouse(start, warehouse, end){
     ? coords1.concat(coords2.slice(1))
     : [];
 
-  return {
+  const out = {
     km: (leg1.km || 0) + (leg2.km || 0),
     minutes: (leg1.minutes || 0) + (leg2.minutes || 0),
     geometry: { type:"LineString", coordinates: merged },
@@ -2351,6 +2396,9 @@ async function getRouteDataViaWarehouse(start, warehouse, end){
       { from:warehouse, to:end, km:leg2.km, minutes:leg2.minutes }
     ]
   };
+
+  setCachedRouteVia(start, warehouse, end, out);
+  return out;
 }
 
 async function showRouteDetails(origin, target, baseRow){
