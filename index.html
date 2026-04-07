@@ -625,7 +625,7 @@
       <div class="kpi">
         <div class="h">Routing</div>
         <div class="v" id="kpiRoute">—</div>
-        <div class="small" id="kpiRouteHint">Übersicht nutzt echte Strecke</div>
+        <div class="small" id="kpiRouteHint">Liste und Details verwenden dieselbe Strecke</div>
       </div>
       <div class="kpi clickable" id="lagerCard">
         <div class="h">Lager</div>
@@ -652,7 +652,7 @@
       <b>Modus Kunden:</b> Kunde auswählen → Firmen-Vorschläge.
       <br><b>Modus Firmen:</b> Firma auswählen → Kunden-Vorschläge.
       <br><b>Lager:</b> Optionaler Zwischenpunkt für Firma → Lager → Kunde.
-      <br><b>Route:</b> Liste und Details nutzen dieselbe Berechnung.
+      <br><b>Route:</b> Übersicht und Details rechnen mit denselben Kilometern.
     </div>
 
     <div id="results"></div>
@@ -691,7 +691,7 @@ const CONFIG = {
   customersCsvUrl: "https://docs.google.com/spreadsheets/d/1DaiLyZbhJkdSQ1PHbJQmguIrDnGrrhiAVgJC4PJO8vA/gviz/tq?tqx=out:csv&gid=0",
   deliveriesCsvUrl: "https://docs.google.com/spreadsheets/d/1fcvlM2BUDpoV-HDyPtgDf_1ZqWql6MdEMbisR0eqYYw/gviz/tq?tqx=out:csv&gid=0",
   geocodeDelayMs: 1100,
-  routeConcurrency: 3
+  routingPauseMs: 140
 };
 
 const LS_GEO_CACHE_KEY = "salesMap_geoCache_v19";
@@ -700,6 +700,7 @@ const LS_PANEL_POS_KEY = "salesMap_panelPos_v16";
 const LS_THEME_KEY = "salesMap_theme_v10";
 const LS_NOTES_KEY = "salesMap_notes_v6";
 const LS_ZONE_GEOJSON_KEY = "salesMap_zone_geojson_v6";
+const LS_ROUTE_CACHE_KEY = "salesMap_routeCache_v3";
 
 const missing = { firmen: [], kunden: [], auftraege: [] };
 let activeMissTab = "firmen";
@@ -719,6 +720,7 @@ let deliveriesByFirm = new Map();
 let geoCache = loadLS(LS_GEO_CACHE_KEY, {});
 let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
 let notesStore = loadLS(LS_NOTES_KEY, {});
+let routeCache = loadLS(LS_ROUTE_CACHE_KEY, {});
 let isMobile = false;
 
 let zoneGroup = null;
@@ -729,16 +731,16 @@ let lastResults = [];
 let currentFocusedRow = null;
 let markerStateById = new Map();
 let hasCalculatedOnce = false;
-const routeCache = new Map();
+let calcToken = 0;
 
 window.addEventListener("load", ()=>init().catch(err=>{
   console.error("INIT ERROR:", err);
-  alert("Fehler beim Laden der Karte. Öffne F12 → Konsole für Details.");
+  alert("Fehler beim Laden der Karte. Bitte F12 → Konsole öffnen.");
 }));
 
 async function init(){
   applyThemeFromLS();
-  if(!window.L) throw new Error("Leaflet (L) nicht geladen.");
+  if(!window.L) throw new Error("Leaflet nicht geladen.");
 
   map = L.map("map", { worldCopyJump:true }).setView([51.2, 10.4], 6);
 
@@ -747,7 +749,7 @@ async function init(){
     attribution: "&copy; OpenStreetMap contributors"
   }).addTo(map);
 
-  setTimeout(()=>map.invalidateSize(), 80);
+  setTimeout(()=>map.invalidateSize(), 120);
 
   initZoneTools();
   initPanelDragDesktopOnly();
@@ -774,6 +776,8 @@ async function init(){
   updateLoadStatusCounts("✅ geladen");
   updateMiniKpis({good:0, mid:0, bad:0});
   updateModeUI();
+
+  setTimeout(()=>map.invalidateSize(), 250);
 }
 
 function applyResponsiveLayout(){
@@ -808,6 +812,7 @@ function addMissing(tab, name, reason, extra){
     extra: extra || ""
   });
 }
+
 function renderMissing(tab){
   activeMissTab = tab;
   const body = document.getElementById("missBody");
@@ -828,6 +833,7 @@ function renderMissing(tab){
     </div>
   `).join("");
 }
+
 function exportMissingCsv(){
   const tab = activeMissTab;
   const rows = missing[tab] || [];
@@ -1296,6 +1302,67 @@ function pickRowField(r, keys=[], fallbackIndex=null){
   if(Number.isInteger(fallbackIndex)) return str(rowValueByIndex(r, fallbackIndex)).trim();
   return "";
 }
+
+function splitAddressText(text){
+  const s = str(text).trim();
+  if(!s) return { street:"", plz:"", ort:"", land:"" };
+
+  const parts = s.split(",").map(x=>x.trim()).filter(Boolean);
+  if(parts.length >= 3){
+    const street = parts[0] || "";
+    const plzOrt = parts[1] || "";
+    const land = parts.slice(2).join(", ");
+    const match = plzOrt.match(/(\d{4,6})\s+(.*)/);
+    return {
+      street,
+      plz: match ? match[1] : "",
+      ort: match ? match[2] : plzOrt,
+      land
+    };
+  }
+  return { street:"", plz:"", ort:s, land:"" };
+}
+
+function buildAddressFromParts(parts){
+  const clean = parts.map(v => str(v).trim()).filter(v => v !== "");
+  return clean.join(", ");
+}
+
+function buildCustomerAddress(r){
+  const street = pickRowField(r, ["straße","strasse","street"], 1);
+  const plz    = pickRowField(r, ["plz","postleitzahl","zip"], 2);
+  const ort    = pickRowField(r, ["ort","stadt","city"], 3);
+  const land   = pickRowField(r, ["land","country"], 4);
+
+  const addressParts = buildAddressFromParts([street, plz, ort, land]);
+  if(addressParts) return addressParts;
+
+  const oneField = pickRowField(r, ["adresse","address"], null);
+  if(oneField) return oneField;
+
+  return "";
+}
+
+function buildFirmAddress(r){
+  const street = pickRowField(r, ["straße","strasse","street"], 1);
+  const plz    = pickRowField(r, ["plz","postleitzahl","zip"], 2);
+  const ort    = pickRowField(r, ["ort","stadt","city"], 3);
+  const land   = pickRowField(r, ["land","country"], 4);
+
+  const addressParts = buildAddressFromParts([street, plz, ort, land]);
+  if(addressParts) return addressParts;
+
+  const addrOne = pickRowField(r, ["adresse","address"], null);
+  if(addrOne){
+    const split = splitAddressText(addrOne);
+    const rebuilt = buildAddressFromParts([split.street, split.plz, split.ort, split.land]);
+    return rebuilt || addrOne;
+  }
+
+  const ortOnly = pickRowField(r, ["ort"], 3);
+  return ortOnly || "";
+}
+
 function getCustomerAcceptsFromRow(r){
   return {
     lose: isYes(pickRowField(r, ["lose","lose pellets","losepellets","pellets lose","lose-pellets","c"], 2)),
@@ -1304,34 +1371,21 @@ function getCustomerAcceptsFromRow(r){
   };
 }
 
-function buildAddressFromParts(parts){
-  const clean = parts
-    .map(v => str(v).trim())
-    .filter(v => v !== "");
-  return clean.join(", ");
+function getFirmProductFlags(r){
+  const sackInfo = pickRowField(r, ["sackware"], 9);
+  const industrieInfo = pickRowField(r, ["industrieware"], 10);
+  return {
+    sackware: str(sackInfo).trim() !== "",
+    industrieware: str(industrieInfo).trim() !== ""
+  };
 }
-function buildCustomerAddress(r){
-  const street = pickRowField(r, ["straße","strasse","street"], 1);
-  const plz    = pickRowField(r, ["plz","postleitzahl","zip"], 2);
-  const ort    = pickRowField(r, ["ort","stadt","city"], 3);
-  const land   = pickRowField(r, ["land","country"], 4);
 
-  const newAddress = buildAddressFromParts([street, plz, ort, land]);
-  if(newAddress) return newAddress;
-
-  const oldAddress = pickRowField(r, ["adresse","address"], null);
-  return oldAddress;
-}
-function buildFirmAddress(r){
-  const street = pickRowField(r, ["straße","strasse","street"], 1);
-  const plz    = pickRowField(r, ["plz","postleitzahl","zip"], 2);
-  const ort    = pickRowField(r, ["ort","stadt","city"], 3);
-  const land   = pickRowField(r, ["land","country"], 4);
-  const address = buildAddressFromParts([street, plz, ort, land]);
-  if(address) return address;
-
-  const oldAddress = pickRowField(r, ["adresse","address"], null);
-  return oldAddress;
+function getFirmBasePrices(r){
+  return {
+    lose: toNum(pickRowField(r, ["preis"], 5)),
+    sackware: toNum(pickRowField(r, ["sackwarenpreis","sackwarenp","sackwarepreis","sackwarep"], 7)),
+    industrieware: toNum(pickRowField(r, ["preis"], 5))
+  };
 }
 
 async function loadCustomers(){
@@ -1367,33 +1421,24 @@ async function loadFirms(){
   rows.forEach((r, idx)=>{
     const name = str(r["firma"] ?? r["name"]).trim();
     const address = buildFirmAddress(r);
+    const flags = getFirmProductFlags(r);
+    const base = getFirmBasePrices(r);
 
     if(!address){
       addMissing("firmen", name || "Firma", "Keine Adresse", `Zeile: ${idx+2}`);
       return;
     }
 
-    const losePrice = toNum(pickRowField(r, ["preis"], 5));
-    const sackPrice = toNum(pickRowField(r, ["sackwarenpreis","sackwarepreis","sackwarenp","sackwarep"], 7));
-
-    const sackInfo = pickRowField(r, ["sackware"], 9);
-    const industryInfo = pickRowField(r, ["industrieware","industrie","industriewaren"], 10);
-
     list.push({
       id:"F"+idx,
       name: name || "Firma",
       address,
-      base:{
-        lose: losePrice,
-        sackware: sackPrice
-      },
-      stand: getStandFromRow(r) || pickRowField(r, ["stand"], 6),
-      sackInfo: str(sackInfo).trim(),
-      industryInfo: str(industryInfo).trim(),
-      sackAvailable: hasProductValue(sackInfo),
-      industryAvailable: hasProductValue(industryInfo),
-      certificateRaw: str(r["zertifikat"] ?? r["zertifikate"] ?? r["zertifikat(e)"] ?? rowValueByIndex(r, 8)).trim(),
-      certificates: normalizeCertificates(str(r["zertifikat"] ?? r["zertifikate"] ?? r["zertifikat(e)"] ?? rowValueByIndex(r, 8)).trim()),
+      base,
+      products: flags,
+      stand: getStandFromRow(r),
+      sackInfo: str(pickRowField(r, ["sackware"], 9)).trim(),
+      certificateRaw: str(pickRowField(r, ["zertifikat","zertifikate","zertifikat(e)"], 8)).trim(),
+      certificates: normalizeCertificates(str(pickRowField(r, ["zertifikat","zertifikate","zertifikat(e)"], 8)).trim()),
       lat: NaN, lon: NaN,
       raw: r
     });
@@ -1621,34 +1666,12 @@ function customerMatchesSelectedProduct(customer, product){
   if(product === "industrieware") return !!customer.accepts.industrieware;
   return true;
 }
-function firmOffersProduct(firm, product){
+function firmMatchesSelectedProduct(firm, product){
   if(!firm) return false;
-  if(product === "lose"){
-    return isFinite(firm.base?.lose) && firm.base.lose > 0;
-  }
-  if(product === "sackware"){
-    const price = firm.base?.sackware;
-    return firm.sackAvailable && isFinite(price) && price > 0;
-  }
-  if(product === "industrieware"){
-    return firm.industryAvailable && isFinite(firm.base?.lose) && firm.base.lose > 0;
-  }
-  return false;
-}
-function getFirmBasePrice(firm, product){
-  const override = priceOverrides?.[firm.id]?.[product];
-  if(isFinite(override) && override > 0) return override;
-
-  if(product === "lose"){
-    return isFinite(firm.base?.lose) && firm.base.lose > 0 ? firm.base.lose : NaN;
-  }
-  if(product === "sackware"){
-    return (firm.sackAvailable && isFinite(firm.base?.sackware) && firm.base.sackware > 0) ? firm.base.sackware : NaN;
-  }
-  if(product === "industrieware"){
-    return (firm.industryAvailable && isFinite(firm.base?.lose) && firm.base.lose > 0) ? firm.base.lose : NaN;
-  }
-  return NaN;
+  if(product === "lose") return isFinite(firm.base?.lose) && firm.base.lose > 0;
+  if(product === "sackware") return !!firm.products?.sackware && isFinite(firm.base?.sackware) && firm.base.sackware > 0;
+  if(product === "industrieware") return !!firm.products?.industrieware && isFinite(firm.base?.industrieware) && firm.base.industrieware > 0;
+  return true;
 }
 function getVisibleCustomers(){
   const product = document.getElementById("product")?.value || "lose";
@@ -1656,7 +1679,7 @@ function getVisibleCustomers(){
 }
 function getVisibleFirms(){
   const product = document.getElementById("product")?.value || "lose";
-  return firms.filter(f => matchesCertificateFilter(f) && firmOffersProduct(f, product));
+  return firms.filter(f => matchesCertificateFilter(f) && firmMatchesSelectedProduct(f, product));
 }
 
 function clearMarkerState(){
@@ -1702,4 +1725,579 @@ function renderMarkers(){
   customerMarkers=[]; firmMarkers=[];
 
   const inputs = getInputs();
-  const outline = document.body.classList.contains("dark") ? "rgba(229,231,235,.9)" : "rgba(15,23,42,.9)
+  const outline = document.body.classList.contains("dark") ? "rgba(229,231,235,.9)" : "rgba(15,23,42,.9)";
+
+  customers.forEach(c=>{
+    if(!isFinite(c.lat)||!isFinite(c.lon)) return;
+    if(!customerMatchesSelectedProduct(c, inputs.product)) return;
+
+    const isSelected = selectedCustomer && selectedCustomer.id === c.id;
+    const isWarehouse = selectedWarehouse && selectedWarehouse.kind === "kunde" && selectedWarehouse.ref.id === c.id;
+    const cls = markerStateById.get(c.id);
+    const fillColor = hasCalculatedOnce && cls ? classToColor(cls) : null;
+
+    const m = L.marker([c.lat,c.lon], {
+      icon: customerTriangleIcon(isSelected || isWarehouse, fillColor || (isWarehouse ? getCss("--highlight") : null))
+    }).addTo(map);
+
+    m.on("click", async ()=>{
+      if(getSearchType()==="kunden"){
+        selectCustomer(c);
+      }else{
+        const row = lastResults.find(r => r.entity.id === c.id);
+        if(row) await showRouteDetails(getOrigin(), c, row);
+      }
+    });
+
+    customerMarkers.push(m);
+  });
+
+  firms.forEach(f=>{
+    if(!isFinite(f.lat)||!isFinite(f.lon)) return;
+    if(!matchesCertificateFilter(f)) return;
+    if(!firmMatchesSelectedProduct(f, inputs.product)) return;
+
+    const isSelected = selectedFirm && selectedFirm.id === f.id;
+    const isWarehouse = selectedWarehouse && selectedWarehouse.kind === "firma" && selectedWarehouse.ref.id === f.id;
+    const cls = markerStateById.get(f.id);
+    const fill = hasCalculatedOnce && cls ? classToColor(cls) : (isWarehouse ? getCss("--highlight") : (getCss("--firm-gray") || "#9ca3af"));
+
+    const m = L.circleMarker([f.lat,f.lon], {
+      radius:(isSelected || isWarehouse) ? 10 : 7,
+      color:(isSelected || isWarehouse) ? getCss("--highlight") : outline,
+      weight:(isSelected || isWarehouse) ? 4 : 2,
+      fillColor:fill,
+      fillOpacity:.95
+    }).addTo(map);
+
+    m.on("click", async ()=>{
+      if(getSearchType()==="firmen"){
+        selectFirm(f);
+      }else{
+        const row = lastResults.find(r => r.entity.id === f.id);
+        if(row) await showRouteDetails(getOrigin(), f, row);
+      }
+    });
+
+    m.on("contextmenu", (e)=>openFirmPriceAndNotePopup(f, e.latlng));
+    firmMarkers.push(m);
+  });
+
+  updateLoadStatusCounts();
+}
+
+function openFirmPriceAndNotePopup(firm, latlng){
+  const product = document.getElementById("product").value;
+  const currentOverride = priceOverrides?.[firm.id]?.[product];
+  const currentPrice = isFinite(currentOverride) ? currentOverride : firm.base[product];
+  const currentNote = (notesStore?.[firm.id] || "").trim();
+  const certsText = (firm.certificates || []).map(certificateLabel).join(", ");
+
+  const div = document.createElement("div");
+  div.className="rcard";
+  div.innerHTML = `
+    <div class="h">${esc(firm.name)}</div>
+    <div class="small">${esc(firm.address)}</div>
+    <div class="small" style="margin-top:4px;">Zertifikat: <b>${esc(certsText || "—")}</b></div>
+
+    <div class="row2">
+      <div class="small">Preis für <b>${esc(productLabel(product))}</b> (€/t)</div>
+      <input id="priceInput" type="number" step="0.01" value="${isFinite(currentPrice)?currentPrice:""}" placeholder="Preis €/t">
+      <div class="note">Enter = Preis speichern · Esc schließt</div>
+    </div>
+
+    <div class="row2" style="margin-top:10px;">
+      <div class="small"><b>Notiz</b></div>
+      <textarea id="noteTxt" placeholder="Notiz eingeben…">${esc(currentNote)}</textarea>
+      <div class="note">Notiz speichert automatisch beim Rausklicken / Schließen.</div>
+    </div>
+  `;
+
+  const popup = L.popup({closeButton:true, autoClose:true, closeOnClick:true})
+    .setLatLng(latlng)
+    .setContent(div)
+    .openOn(map);
+
+  setTimeout(()=>{
+    const inp = div.querySelector("#priceInput");
+    const ta  = div.querySelector("#noteTxt");
+
+    inp.addEventListener("keydown",(e)=>{
+      if(e.key==="Enter"){
+        const v = toNum(inp.value);
+        if(isFinite(v) && v>0){
+          priceOverrides[firm.id] = priceOverrides[firm.id] || {};
+          priceOverrides[firm.id][product] = v;
+          saveLS(LS_PRICE_OVERRIDES_KEY, priceOverrides);
+          renderMarkers();
+          if(getOrigin()) calculate();
+          setTimeout(()=>ta.focus(), 10);
+        }
+      }
+      if(e.key==="Escape") map.closePopup(popup);
+    });
+
+    const saveNote = ()=>{
+      const v = String(ta.value||"").trim();
+      if(v) notesStore[firm.id] = v;
+      else delete notesStore[firm.id];
+      saveLS(LS_NOTES_KEY, notesStore);
+    };
+
+    ta.addEventListener("keydown",(e)=>{ if(e.key==="Escape") map.closePopup(popup); });
+    ta.addEventListener("blur", saveNote);
+    map.on("popupclose", saveNote);
+
+    inp.focus(); inp.select();
+  }, 30);
+}
+
+function initUI(){
+  document.getElementById("btnGeo")?.addEventListener("click", geocodeAll);
+  document.getElementById("btnCalc").addEventListener("click", calculate);
+
+  document.getElementById("btnZoneDraw").addEventListener("click", ()=>startDrawZone());
+  document.getElementById("btnZoneClear").addEventListener("click", ()=>clearZone());
+
+  document.getElementById("btnTheme").addEventListener("click", ()=>{
+    document.body.classList.toggle("dark");
+    saveLS(LS_THEME_KEY, document.body.classList.contains("dark") ? "dark" : "light");
+    renderMarkers();
+  });
+
+  document.getElementById("product").addEventListener("change", ()=>{
+    clearMarkerState();
+
+    const origin = getOrigin();
+
+    if(getSearchType()==="kunden" && origin && !customerMatchesSelectedProduct(origin, document.getElementById("product").value)){
+      selectedCustomer = null;
+      updateOriginKpi(null);
+      showOrdersForOrigin(null);
+      clearRoute();
+      hideDetail();
+      document.getElementById("results").innerHTML = "";
+      document.getElementById("kpiCount").textContent = "—";
+    }
+
+    if(getSearchType()==="firmen" && origin && !firmMatchesSelectedProduct(origin, document.getElementById("product").value)){
+      selectedFirm = null;
+      updateOriginKpi(null);
+      showOrdersForOrigin(null);
+      clearRoute();
+      hideDetail();
+      document.getElementById("results").innerHTML = "";
+      document.getElementById("kpiCount").textContent = "—";
+    }
+
+    if(selectedWarehouse && selectedWarehouse.kind === "kunde" && !customerMatchesSelectedProduct(selectedWarehouse.ref, document.getElementById("product").value)){
+      selectedWarehouse = null;
+      updateWarehouseKpi();
+    }
+    if(selectedWarehouse && selectedWarehouse.kind === "firma" && !firmMatchesSelectedProduct(selectedWarehouse.ref, document.getElementById("product").value)){
+      selectedWarehouse = null;
+      updateWarehouseKpi();
+    }
+
+    renderMarkers();
+    if(getOrigin()) calculate();
+  });
+
+  document.getElementById("closePanel").addEventListener("click", ()=>{
+    document.getElementById("panel").classList.add("hidden");
+    setTimeout(()=>map.invalidateSize(), 50);
+  });
+
+  document.getElementById("searchType").addEventListener("change", ()=>{
+    clearRoute();
+    hideDetail();
+    document.getElementById("results").innerHTML = "";
+    document.getElementById("kpiCount").textContent = "—";
+    updateMiniKpis({good:0, mid:0, bad:0});
+    lastResults = [];
+    currentFocusedRow = null;
+    clearMarkerState();
+
+    if(getSearchType()==="kunden"){
+      selectedFirm = null;
+      if(selectedCustomer && !customerMatchesSelectedProduct(selectedCustomer, document.getElementById("product").value)){
+        selectedCustomer = null;
+      }
+      updateOriginKpi(selectedCustomer);
+    }else{
+      selectedCustomer = null;
+      if(selectedFirm && !firmMatchesSelectedProduct(selectedFirm, document.getElementById("product").value)){
+        selectedFirm = null;
+      }
+      updateOriginKpi(selectedFirm);
+    }
+
+    renderMarkers();
+    updateModeUI();
+    document.getElementById("custSearch").value = "";
+    document.getElementById("ac").style.display = "none";
+  });
+
+  const input = document.getElementById("custSearch");
+  const ac = document.getElementById("ac");
+
+  function positionAC(){
+    const mobileInput = document.getElementById("custSearchMobile");
+    const active = (document.activeElement === mobileInput) ? mobileInput : input;
+    const r = active.getBoundingClientRect();
+    ac.style.left = (r.left + window.scrollX) + "px";
+    ac.style.top  = (r.bottom + window.scrollY + 8) + "px";
+    ac.style.minWidth = Math.max(280, r.width) + "px";
+  }
+
+  window.addEventListener("resize", positionAC);
+  window.addEventListener("scroll", positionAC, true);
+
+  input.addEventListener("focus", ()=>{ positionAC(); showSuggestions(input.value); });
+  input.addEventListener("input", ()=>{ positionAC(); showSuggestions(input.value); });
+
+  input.addEventListener("keydown", (e)=>{
+    if(e.key === "Escape") ac.style.display="none";
+    if(e.key === "Enter"){
+      const q = input.value.trim().toLowerCase();
+      const found = bestMatch(q);
+      if(found){
+        selectEntity(found);
+        ac.style.display="none";
+      }
+    }
+  });
+
+  document.addEventListener("click", (e)=>{
+    if(ac.contains(e.target)) return;
+    const mobileInput = document.getElementById("custSearchMobile");
+    if(e.target === input || e.target === mobileInput) return;
+    ac.style.display="none";
+  });
+
+  function getActiveList(){
+    if(getSearchType()==="kunden") return getVisibleCustomers();
+    return getVisibleFirms();
+  }
+  function bestMatch(q){
+    if(!q) return null;
+    const list = getActiveList();
+    const starts = list.filter(x => (x.name||"").toLowerCase().startsWith(q) || (x.address||"").toLowerCase().startsWith(q));
+    if(starts.length) return starts[0];
+    const contains = list.filter(x => (x.name||"").toLowerCase().includes(q) || (x.address||"").toLowerCase().includes(q));
+    return contains[0] || null;
+  }
+  function selectEntity(entity){
+    if(getSearchType()==="kunden") selectCustomer(entity);
+    else selectFirm(entity);
+  }
+  function showSuggestions(qRaw){
+    const q = (qRaw||"").trim().toLowerCase();
+    ac.innerHTML = "";
+    if(!q){ ac.style.display="none"; return; }
+
+    const list = getActiveList();
+    const starts=[], contains=[];
+    for(const x of list){
+      const name=(x.name||"").toLowerCase();
+      const addr=(x.address||"").toLowerCase();
+      if(name.startsWith(q) || addr.startsWith(q)) starts.push(x);
+      else if(name.includes(q) || addr.includes(q)) contains.push(x);
+    }
+
+    const out=[...starts,...contains].slice(0,12);
+    if(!out.length){ ac.style.display="none"; return; }
+
+    const tag = getSearchType()==="kunden" ? "Kunde" : "Firma";
+    const currentProduct = document.getElementById("product").value;
+
+    for(const x of out){
+      const info = getSearchType()==="firmen"
+        ? `<div class="tag">${esc(tag)} · ${esc((x.certificates||[]).map(certificateLabel).join(", ") || "—")}</div>`
+        : `<div class="tag">${esc(tag)} · ${esc(productLabel(currentProduct))}</div>`;
+
+      const div=document.createElement("div");
+      div.className="item";
+      div.innerHTML = `<div class="name">${esc(x.name)}</div><div class="addr">${esc(x.address)}</div>${info}`;
+      div.addEventListener("click", ()=>{
+        selectEntity(x);
+        ac.style.display="none";
+        closeDrawer();
+      });
+      ac.appendChild(div);
+    }
+    ac.style.display="block";
+  }
+}
+
+function updateModeUI(){
+  const mode = getSearchType();
+
+  document.getElementById("radiusWrapDesktop").style.display = (mode==="kunden") ? "" : "none";
+  document.getElementById("btnZoneDraw").style.display = (mode==="firmen") ? "" : "none";
+  document.getElementById("btnZoneClear").style.display = (mode==="firmen") ? "" : "none";
+
+  document.getElementById("radiusWrapMobile").style.display = (mode==="kunden") ? "" : "none";
+  document.getElementById("zoneActionsMobile").style.display = (mode==="firmen") ? "grid" : "none";
+
+  document.getElementById("kpiOriginLabel").textContent = (mode==="kunden") ? "Kunde" : "Firma";
+}
+
+function applyThemeFromLS(){
+  const t = loadLS(LS_THEME_KEY, "light");
+  if(t === "dark") document.body.classList.add("dark");
+}
+function setLoadStatus(text){
+  document.getElementById("loadStatus").innerHTML = `<span class="dot"></span> ${esc(text)}`;
+}
+
+function getSearchType(){ return document.getElementById("searchType")?.value || "kunden"; }
+function getOrigin(){ return (getSearchType()==="kunden") ? selectedCustomer : selectedFirm; }
+function getWarehouseRef(){ return selectedWarehouse?.ref || null; }
+
+function selectCustomer(c){
+  if(!customerMatchesSelectedProduct(c, document.getElementById("product").value)) return;
+
+  selectedCustomer = c;
+  selectedFirm = null;
+  updateOriginKpi(c);
+  showOrdersForOrigin(c);
+  renderMarkers();
+
+  if(isFinite(c.lat)&&isFinite(c.lon)){
+    map.setView([c.lat,c.lon], Math.max(map.getZoom(), 8), {animate:true});
+  }
+  const panel = document.getElementById("panel");
+  panel.classList.remove("hidden");
+  if(isMobile) panel.classList.remove("collapsed");
+  setTimeout(()=>map.invalidateSize(), 50);
+}
+
+function selectFirm(f){
+  if(!matchesCertificateFilter(f) || !firmMatchesSelectedProduct(f, document.getElementById("product").value)) return;
+
+  selectedFirm = f;
+  selectedCustomer = null;
+  updateOriginKpi(f);
+  showOrdersForOrigin(f);
+  renderMarkers();
+
+  if(isFinite(f.lat)&&isFinite(f.lon)){
+    map.setView([f.lat,f.lon], Math.max(map.getZoom(), 8), {animate:true});
+  }
+  const panel = document.getElementById("panel");
+  panel.classList.remove("hidden");
+  if(isMobile) panel.classList.remove("collapsed");
+  setTimeout(()=>map.invalidateSize(), 50);
+}
+
+function getInputs(){
+  const factor = toNum(document.getElementById("factor").value);
+  return {
+    product: document.getElementById("product").value,
+    radiusKm: toNum(document.getElementById("radiusKm").value) || 250,
+    qtyT: Math.max(0.1, toNum(document.getElementById("qtyT").value) || 24),
+    freightPerKm: toNum(document.getElementById("freightPerKm").value) || 1.85,
+    factor: isFinite(factor) ? factor : 1.05,
+    targetVk: toNum(document.getElementById("targetVk").value)
+  };
+}
+
+function makeRouteCacheKey(points){
+  return points.map(p => `${Number(p.lat).toFixed(5)},${Number(p.lon).toFixed(5)}`).join("|");
+}
+
+function buildRouteFromCache(cached){
+  if(!cached) return null;
+  return {
+    km: cached.km,
+    minutes: cached.minutes,
+    geometry: cached.geometry || null,
+    legs: cached.legs || null,
+    mode: cached.mode || "cache"
+  };
+}
+
+async function getRouteData(from, to){
+  const key = makeRouteCacheKey([from, to]);
+  if(routeCache[key]) return buildRouteFromCache(routeCache[key]);
+
+  try{
+    const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if(data && data.routes && data.routes[0]){
+      const r = data.routes[0];
+      const out = {
+        km: r.distance / 1000,
+        minutes: r.duration / 60,
+        geometry: r.geometry,
+        mode: "direct"
+      };
+      routeCache[key] = out;
+      saveLS(LS_ROUTE_CACHE_KEY, routeCache);
+      return out;
+    }
+  }catch(e){
+    console.error("Routing Fehler:", e);
+  }
+  return null;
+}
+
+async function getRouteDataViaWarehouse(start, warehouse, end){
+  const key = makeRouteCacheKey([start, warehouse, end]);
+  if(routeCache[key]) return buildRouteFromCache(routeCache[key]);
+
+  const leg1 = await getRouteData(start, warehouse);
+  await sleep(CONFIG.routingPauseMs);
+  const leg2 = await getRouteData(warehouse, end);
+
+  if(!leg1 || !leg2) return null;
+
+  const coords1 = Array.isArray(leg1.geometry?.coordinates) ? leg1.geometry.coordinates : [];
+  const coords2 = Array.isArray(leg2.geometry?.coordinates) ? leg2.geometry.coordinates : [];
+  const merged = coords1.length && coords2.length
+    ? coords1.concat(coords2.slice(1))
+    : [];
+
+  const out = {
+    km: (leg1.km || 0) + (leg2.km || 0),
+    minutes: (leg1.minutes || 0) + (leg2.minutes || 0),
+    geometry: { type:"LineString", coordinates: merged },
+    legs: [
+      { from:start, to:warehouse, km:leg1.km, minutes:leg1.minutes },
+      { from:warehouse, to:end, km:leg2.km, minutes:leg2.minutes }
+    ],
+    mode: "via_warehouse"
+  };
+
+  routeCache[key] = out;
+  saveLS(LS_ROUTE_CACHE_KEY, routeCache);
+  return out;
+}
+
+async function getRealRouteForPair(mode, origin, target, warehouse){
+  let start = origin;
+  let end = target;
+
+  if(mode === "kunden"){
+    start = target;
+    end = origin;
+  }
+
+  if(warehouse) return await getRouteDataViaWarehouse(start, warehouse, end);
+  return await getRouteData(start, end);
+}
+
+function getFirmBasePriceForProduct(firm, product){
+  const override = priceOverrides?.[firm.id]?.[product];
+  if(isFinite(override) && override > 0) return override;
+
+  if(product === "lose"){
+    return firm.base?.lose;
+  }
+  if(product === "sackware"){
+    return firm.base?.sackware;
+  }
+  if(product === "industrieware"){
+    return firm.base?.industrieware;
+  }
+  return NaN;
+}
+
+function computeDeliveredValues(base, km, inputs){
+  const freightPerT = (km * inputs.freightPerKm / inputs.qtyT) * inputs.factor;
+  const deliveredPerT = base + freightPerT;
+  const deliveredTotal = deliveredPerT * inputs.qtyT;
+  const marginPerT = isFinite(inputs.targetVk) ? (inputs.targetVk - deliveredPerT) : NaN;
+  return { freightPerT, deliveredPerT, deliveredTotal, marginPerT };
+}
+
+async function calculate(){
+  const thisCalcToken = ++calcToken;
+  const out = document.getElementById("results");
+  out.innerHTML = "";
+  hideDetail();
+  clearRoute();
+
+  const mode = getSearchType();
+  const origin = getOrigin();
+  const warehouse = getWarehouseRef();
+
+  if(!origin || !isFinite(origin.lat) || !isFinite(origin.lon)){
+    out.innerHTML = `<div class="small">Bitte zuerst ${mode==="kunden" ? "einen Kunden" : "eine Firma"} auswählen und ggf. vorher geocoden.</div>`;
+    document.getElementById("kpiCount").textContent = "—";
+    updateMiniKpis({good:0, mid:0, bad:0});
+    clearMarkerState();
+    renderMarkers();
+    return;
+  }
+
+  if(warehouse && (!isFinite(warehouse.lat) || !isFinite(warehouse.lon))){
+    out.innerHTML = `<div class="small">Das gewählte Lager hat keine Koordinaten.</div>`;
+    document.getElementById("kpiCount").textContent = "—";
+    return;
+  }
+
+  const inputs = getInputs();
+  const {product, radiusKm, targetVk} = inputs;
+
+  document.getElementById("kpiQty").textContent = `Menge: ${fmt(inputs.qtyT,1)} t`;
+  document.getElementById("kpiRoute").textContent = "Berechnung läuft …";
+  document.getElementById("kpiRouteHint").textContent = warehouse
+    ? "Liste und Details rechnen mit derselben echten Strecke über Lager"
+    : "Liste und Details rechnen mit derselben echten Strecke";
+
+  const candidates = [];
+
+  if(mode === "kunden"){
+    if(origin.accepts && origin.accepts[product] === false){
+      out.innerHTML = `<div class="small">⚠️ <b>${esc(origin.name)}</b> nimmt <b>${esc(productLabel(product))}</b> nicht an.</div>`;
+      document.getElementById("kpiCount").textContent = "0";
+      updateMiniKpis({good:0, mid:0, bad:0});
+      clearMarkerState();
+      renderMarkers();
+      document.getElementById("kpiRoute").textContent = "—";
+      return;
+    }
+
+    for(const f of firms){
+      if(!isFinite(f.lat)||!isFinite(f.lon)) continue;
+      if(!matchesCertificateFilter(f)) continue;
+      if(!firmMatchesSelectedProduct(f, product)) continue;
+      if(warehouse && warehouse.id === f.id) continue;
+
+      const directAir = haversineKm(f.lat, f.lon, origin.lat, origin.lon);
+      if(directAir > radiusKm) continue;
+
+      const base = getFirmBasePriceForProduct(f, product);
+      if(!isFinite(base) || base <= 0) continue;
+
+      candidates.push({
+        entity: f,
+        airKm: directAir,
+        base
+      });
+    }
+  }else{
+    const firm = origin;
+    const baseFirm = getFirmBasePriceForProduct(firm, product);
+
+    if(!isFinite(baseFirm) || baseFirm <= 0){
+      out.innerHTML = `<div class="small">⚠️ Für <b>${esc(firm.name)}</b> fehlt der Preis für <b>${esc(productLabel(product))}</b>.</div>`;
+      document.getElementById("kpiCount").textContent = "0";
+      updateMiniKpis({good:0, mid:0, bad:0});
+      clearMarkerState();
+      renderMarkers();
+      document.getElementById("kpiRoute").textContent = "—";
+      return;
+    }
+
+    for(const c of customers){
+      if(!isFinite(c.lat)||!isFinite(c.lon)) continue;
+      if(!customerMatchesSelectedProduct(c, product)) continue;
+      if(zoneLayer && !pointInZone(c.lat, c.lon)) continue;
+      if(warehouse && warehouse.id === c.id) continue;
+
+      const
