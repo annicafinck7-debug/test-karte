@@ -666,7 +666,7 @@
       <b>Modus Kunden:</b> Kunde auswählen → Firmen-Vorschläge.
       <br><b>Modus Firmen:</b> Firma auswählen → Kunden-Vorschläge.
       <br><b>Lager:</b> Optionaler Zwischenpunkt für Firma → Lager → Kunde.
-      <br><b>Route:</b> Echte Strecke wird erst beim Klick geladen.
+      <br><b>Route:</b> Echte Strecke wird direkt berechnet.
     </div>
 
     <div id="results"></div>
@@ -707,12 +707,12 @@ const CONFIG = {
   geocodeDelayMs: 1100
 };
 
-const LS_GEO_CACHE_KEY = "salesMap_geoCache_v18_fix1";
-const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v16_fix1";
-const LS_PANEL_POS_KEY = "salesMap_panelPos_v16_fix1";
-const LS_THEME_KEY = "salesMap_theme_v10_fix1";
-const LS_NOTES_KEY = "salesMap_notes_v6_fix1";
-const LS_ZONE_GEOJSON_KEY = "salesMap_zone_geojson_v6_fix1";
+const LS_GEO_CACHE_KEY = "salesMap_geoCache_v19";
+const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v17";
+const LS_PANEL_POS_KEY = "salesMap_panelPos_v17";
+const LS_THEME_KEY = "salesMap_theme_v11";
+const LS_NOTES_KEY = "salesMap_notes_v7";
+const LS_ZONE_GEOJSON_KEY = "salesMap_zone_geojson_v7";
 
 const missing = { firmen: [], kunden: [], auftraege: [] };
 let activeMissTab = "firmen";
@@ -2068,9 +2068,9 @@ async function calculate(){
 
   document.getElementById("kpiQty").textContent = `Menge: ${fmt(qtyT,1)} t`;
   document.getElementById("kpiRoute").textContent = "—";
-  document.getElementById("kpiRouteHint").textContent = warehouse ? "Klick lädt echte Strecke über Lager" : "Klick auf Zeile lädt echte Strecke";
+  document.getElementById("kpiRouteHint").textContent = warehouse ? "KM und Route über Lager" : "KM und Route direkt";
 
-  const results = [];
+  const candidates = [];
 
   if(mode==="kunden"){
     if(origin.accepts && origin.accepts[product] === false){
@@ -2085,35 +2085,18 @@ async function calculate(){
       if(!isFinite(f.lat)||!isFinite(f.lon)) continue;
       if(!matchesCertificateFilter(f)) continue;
       if(warehouse && warehouse.id === f.id) continue;
+      if(warehouse && warehouse.ref && warehouse.ref.id === f.id) continue;
 
-      const kmAir = warehouse
-        ? calcAirDistanceWithWarehouse(f, origin, warehouse)
-        : haversineKm(origin.lat, origin.lon, f.lat, f.lon);
-
-      const kmFilter = warehouse
-        ? haversineKm(f.lat, f.lon, origin.lat, origin.lon)
-        : kmAir;
-
+      const kmFilter = haversineKm(f.lat, f.lon, origin.lat, origin.lon);
       if(kmFilter > radiusKm) continue;
 
       const override = priceOverrides?.[f.id]?.[product];
       const base = isFinite(override) ? override : f.base[product];
       if(!isFinite(base) || base <= 0) continue;
 
-      const freightPerT = (kmAir * freightPerKm / qtyT) * factor;
-      const deliveredPerT = base + freightPerT;
-      const deliveredTotal = deliveredPerT * qtyT;
-      const marginPerT = isFinite(targetVk) ? (targetVk - deliveredPerT) : NaN;
-
-      results.push({
-        entity:f,
-        kmAir,
-        calcKm: kmAir,
-        base,
-        freightPerT,
-        deliveredPerT,
-        deliveredTotal,
-        marginPerT
+      candidates.push({
+        entity: f,
+        base
       });
     }
   }else{
@@ -2138,27 +2121,78 @@ async function calculate(){
       if(!customerMatchesSelectedProduct(c, product)) continue;
       if(zoneLayer && !pointInZone(c.lat, c.lon)) continue;
       if(warehouse && warehouse.id === c.id) continue;
+      if(warehouse && warehouse.ref && warehouse.ref.id === c.id) continue;
 
-      const kmAir = warehouse
-        ? calcAirDistanceWithWarehouse(firm, c, warehouse)
-        : haversineKm(firm.lat, firm.lon, c.lat, c.lon);
-
-      const freightPerT = (kmAir * freightPerKm / qtyT) * factor;
-      const deliveredPerT = baseFirm + freightPerT;
-      const deliveredTotal = deliveredPerT * qtyT;
-      const marginPerT = isFinite(targetVk) ? (targetVk - deliveredPerT) : NaN;
-
-      results.push({
-        entity:c,
-        kmAir,
-        calcKm: kmAir,
-        base: baseFirm,
-        freightPerT,
-        deliveredPerT,
-        deliveredTotal,
-        marginPerT
+      candidates.push({
+        entity: c,
+        base: baseFirm
       });
     }
+  }
+
+  const results = [];
+
+  for(const item of candidates){
+    const ent = item.entity;
+    let route = null;
+    let usedKm = NaN;
+    let minutes = NaN;
+    let routeModeText = "Luftlinie-Fallback";
+    let leg1Km = NaN, leg2Km = NaN, leg1Min = NaN, leg2Min = NaN;
+
+    if(mode === "kunden"){
+      route = warehouse
+        ? await getRouteDataViaWarehouse(ent, warehouse, origin)
+        : await getRouteData(ent, origin);
+    }else{
+      route = warehouse
+        ? await getRouteDataViaWarehouse(origin, warehouse, ent)
+        : await getRouteData(origin, ent);
+    }
+
+    if(route && isFinite(route.km)){
+      usedKm = route.km;
+      minutes = route.minutes;
+      routeModeText = warehouse ? "echte Strecke über Lager" : "echte Strecke";
+
+      if(warehouse && Array.isArray(route.legs) && route.legs.length === 2){
+        leg1Km = route.legs[0].km;
+        leg1Min = route.legs[0].minutes;
+        leg2Km = route.legs[1].km;
+        leg2Min = route.legs[1].minutes;
+      }
+    }else{
+      if(mode === "kunden"){
+        usedKm = warehouse
+          ? calcAirDistanceWithWarehouse(ent, origin, warehouse)
+          : haversineKm(ent.lat, ent.lon, origin.lat, origin.lon);
+      }else{
+        usedKm = warehouse
+          ? calcAirDistanceWithWarehouse(origin, ent, warehouse)
+          : haversineKm(origin.lat, origin.lon, ent.lat, ent.lon);
+      }
+    }
+
+    const freightOnlyPerT = ((usedKm * freightPerKm) / qtyT);
+    const deliveredPerT = (item.base + freightOnlyPerT) * factor;
+    const deliveredTotal = deliveredPerT * qtyT;
+    const marginPerT = isFinite(targetVk) ? (targetVk - deliveredPerT) : NaN;
+
+    results.push({
+      entity: ent,
+      kmAir: usedKm,
+      calcKm: usedKm,
+      routeKm: usedKm,
+      durationMin: minutes,
+      routeData: route,
+      routeModeText,
+      leg1Km, leg2Km, leg1Min, leg2Min,
+      base: item.base,
+      freightPerT: freightOnlyPerT,
+      deliveredPerT,
+      deliveredTotal,
+      marginPerT
+    });
   }
 
   results.sort((a,b)=>a.deliveredPerT - b.deliveredPerT);
@@ -2255,7 +2289,7 @@ function makeBadge(row, targetVk){
     if(cls === "good") return `<span class="badge good">günstig</span>`;
     if(cls === "mid")  return `<span class="badge mid">mittel</span>`;
     if(cls === "bad")  return `<span class="badge bad">teuer</span>`;
-    return `<span class="badge">Klick für Route</span>`;
+    return `<span class="badge">echte KM</span>`;
   }
 }
 
@@ -2369,8 +2403,8 @@ async function showRouteDetails(origin, target, baseRow){
   const factor = inputs.factor;
   const targetVk = inputs.targetVk;
 
-  const freightPerT = (usedKm * freightPerKm / qtyT) * factor;
-  const deliveredPerT = baseRow.base + freightPerT;
+  const freightOnlyPerT = ((usedKm * freightPerKm) / qtyT);
+  const deliveredPerT = (baseRow.base + freightOnlyPerT) * factor;
   const deliveredTotal = deliveredPerT * qtyT;
   const marginPerT = isFinite(targetVk) ? (targetVk - deliveredPerT) : NaN;
 
@@ -2382,7 +2416,7 @@ async function showRouteDetails(origin, target, baseRow){
     routeKm: usedKm,
     durationMin: minutes,
     base: baseRow.base,
-    freightPerT,
+    freightPerT: freightOnlyPerT,
     deliveredPerT,
     deliveredTotal,
     marginPerT,
