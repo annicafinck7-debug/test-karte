@@ -1,3 +1,6 @@
+jetzt gebe mir bitte einen vollständigen funktionierenden code 
+
+
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -625,7 +628,7 @@
       <div class="kpi">
         <div class="h">Routing</div>
         <div class="v" id="kpiRoute">—</div>
-        <div class="small" id="kpiRouteHint">Liste und Details verwenden dieselbe Strecke</div>
+        <div class="small" id="kpiRouteHint">Klick auf Zeile lädt echte Strecke</div>
       </div>
       <div class="kpi clickable" id="lagerCard">
         <div class="h">Lager</div>
@@ -652,7 +655,7 @@
       <b>Modus Kunden:</b> Kunde auswählen → Firmen-Vorschläge.
       <br><b>Modus Firmen:</b> Firma auswählen → Kunden-Vorschläge.
       <br><b>Lager:</b> Optionaler Zwischenpunkt für Firma → Lager → Kunde.
-      <br><b>Route:</b> Übersicht und Details rechnen mit denselben Kilometern.
+      <br><b>Route:</b> Echte Strecke wird erst beim Klick geladen.
     </div>
 
     <div id="results"></div>
@@ -690,17 +693,15 @@ const CONFIG = {
   firmsCsvUrl: "https://docs.google.com/spreadsheets/d/1f1oD1TlYWPRbD12d05yIGkqmXVygVt3ZHLk9U0bKoTs/gviz/tq?tqx=out:csv&gid=0",
   customersCsvUrl: "https://docs.google.com/spreadsheets/d/1DaiLyZbhJkdSQ1PHbJQmguIrDnGrrhiAVgJC4PJO8vA/gviz/tq?tqx=out:csv&gid=0",
   deliveriesCsvUrl: "https://docs.google.com/spreadsheets/d/1fcvlM2BUDpoV-HDyPtgDf_1ZqWql6MdEMbisR0eqYYw/gviz/tq?tqx=out:csv&gid=0",
-  geocodeDelayMs: 1100,
-  routingPauseMs: 140
+  geocodeDelayMs: 1100
 };
 
-const LS_GEO_CACHE_KEY = "salesMap_geoCache_v19";
-const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v17";
+const LS_GEO_CACHE_KEY = "salesMap_geoCache_v18";
+const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v16";
 const LS_PANEL_POS_KEY = "salesMap_panelPos_v16";
 const LS_THEME_KEY = "salesMap_theme_v10";
 const LS_NOTES_KEY = "salesMap_notes_v6";
 const LS_ZONE_GEOJSON_KEY = "salesMap_zone_geojson_v6";
-const LS_ROUTE_CACHE_KEY = "salesMap_routeCache_v3";
 
 const missing = { firmen: [], kunden: [], auftraege: [] };
 let activeMissTab = "firmen";
@@ -720,7 +721,6 @@ let deliveriesByFirm = new Map();
 let geoCache = loadLS(LS_GEO_CACHE_KEY, {});
 let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
 let notesStore = loadLS(LS_NOTES_KEY, {});
-let routeCache = loadLS(LS_ROUTE_CACHE_KEY, {});
 let isMobile = false;
 
 let zoneGroup = null;
@@ -731,16 +731,15 @@ let lastResults = [];
 let currentFocusedRow = null;
 let markerStateById = new Map();
 let hasCalculatedOnce = false;
-let calcToken = 0;
 
 window.addEventListener("load", ()=>init().catch(err=>{
   console.error("INIT ERROR:", err);
-  alert("Fehler beim Laden der Karte. Bitte F12 → Konsole öffnen.");
+  alert("Fehler beim Laden der Karte. Öffne F12 → Konsole für Details.");
 }));
 
 async function init(){
   applyThemeFromLS();
-  if(!window.L) throw new Error("Leaflet nicht geladen.");
+  if(!window.L) throw new Error("Leaflet (L) nicht geladen.");
 
   map = L.map("map", { worldCopyJump:true }).setView([51.2, 10.4], 6);
 
@@ -749,7 +748,7 @@ async function init(){
     attribution: "&copy; OpenStreetMap contributors"
   }).addTo(map);
 
-  setTimeout(()=>map.invalidateSize(), 120);
+  setTimeout(()=>map.invalidateSize(), 80);
 
   initZoneTools();
   initPanelDragDesktopOnly();
@@ -776,8 +775,6 @@ async function init(){
   updateLoadStatusCounts("✅ geladen");
   updateMiniKpis({good:0, mid:0, bad:0});
   updateModeUI();
-
-  setTimeout(()=>map.invalidateSize(), 250);
 }
 
 function applyResponsiveLayout(){
@@ -812,7 +809,6 @@ function addMissing(tab, name, reason, extra){
     extra: extra || ""
   });
 }
-
 function renderMissing(tab){
   activeMissTab = tab;
   const body = document.getElementById("missBody");
@@ -833,7 +829,6 @@ function renderMissing(tab){
     </div>
   `).join("");
 }
-
 function exportMissingCsv(){
   const tab = activeMissTab;
   const rows = missing[tab] || [];
@@ -1302,67 +1297,6 @@ function pickRowField(r, keys=[], fallbackIndex=null){
   if(Number.isInteger(fallbackIndex)) return str(rowValueByIndex(r, fallbackIndex)).trim();
   return "";
 }
-
-function splitAddressText(text){
-  const s = str(text).trim();
-  if(!s) return { street:"", plz:"", ort:"", land:"" };
-
-  const parts = s.split(",").map(x=>x.trim()).filter(Boolean);
-  if(parts.length >= 3){
-    const street = parts[0] || "";
-    const plzOrt = parts[1] || "";
-    const land = parts.slice(2).join(", ");
-    const match = plzOrt.match(/(\d{4,6})\s+(.*)/);
-    return {
-      street,
-      plz: match ? match[1] : "",
-      ort: match ? match[2] : plzOrt,
-      land
-    };
-  }
-  return { street:"", plz:"", ort:s, land:"" };
-}
-
-function buildAddressFromParts(parts){
-  const clean = parts.map(v => str(v).trim()).filter(v => v !== "");
-  return clean.join(", ");
-}
-
-function buildCustomerAddress(r){
-  const street = pickRowField(r, ["straße","strasse","street"], 1);
-  const plz    = pickRowField(r, ["plz","postleitzahl","zip"], 2);
-  const ort    = pickRowField(r, ["ort","stadt","city"], 3);
-  const land   = pickRowField(r, ["land","country"], 4);
-
-  const addressParts = buildAddressFromParts([street, plz, ort, land]);
-  if(addressParts) return addressParts;
-
-  const oneField = pickRowField(r, ["adresse","address"], null);
-  if(oneField) return oneField;
-
-  return "";
-}
-
-function buildFirmAddress(r){
-  const street = pickRowField(r, ["straße","strasse","street"], 1);
-  const plz    = pickRowField(r, ["plz","postleitzahl","zip"], 2);
-  const ort    = pickRowField(r, ["ort","stadt","city"], 3);
-  const land   = pickRowField(r, ["land","country"], 4);
-
-  const addressParts = buildAddressFromParts([street, plz, ort, land]);
-  if(addressParts) return addressParts;
-
-  const addrOne = pickRowField(r, ["adresse","address"], null);
-  if(addrOne){
-    const split = splitAddressText(addrOne);
-    const rebuilt = buildAddressFromParts([split.street, split.plz, split.ort, split.land]);
-    return rebuilt || addrOne;
-  }
-
-  const ortOnly = pickRowField(r, ["ort"], 3);
-  return ortOnly || "";
-}
-
 function getCustomerAcceptsFromRow(r){
   return {
     lose: isYes(pickRowField(r, ["lose","lose pellets","losepellets","pellets lose","lose-pellets","c"], 2)),
@@ -1371,21 +1305,23 @@ function getCustomerAcceptsFromRow(r){
   };
 }
 
-function getFirmProductFlags(r){
-  const sackInfo = pickRowField(r, ["sackware"], 9);
-  const industrieInfo = pickRowField(r, ["industrieware"], 10);
-  return {
-    sackware: str(sackInfo).trim() !== "",
-    industrieware: str(industrieInfo).trim() !== ""
-  };
+function buildAddressFromParts(parts){
+  const clean = parts
+    .map(v => str(v).trim())
+    .filter(v => v !== "");
+  return clean.join(", ");
 }
+function buildCustomerAddress(r){
+  const street = pickRowField(r, ["straße","strasse","street"], 1);
+  const plz    = pickRowField(r, ["plz","postleitzahl","zip"], 2);
+  const ort    = pickRowField(r, ["ort","stadt","city"], 3);
+  const land   = pickRowField(r, ["land","country"], 4);
 
-function getFirmBasePrices(r){
-  return {
-    lose: toNum(pickRowField(r, ["preis"], 5)),
-    sackware: toNum(pickRowField(r, ["sackwarenpreis","sackwarenp","sackwarepreis","sackwarep"], 7)),
-    industrieware: toNum(pickRowField(r, ["preis"], 5))
-  };
+  const newAddress = buildAddressFromParts([street, plz, ort, land]);
+  if(newAddress) return newAddress;
+
+  const oldAddress = pickRowField(r, ["adresse","address"], null);
+  return oldAddress;
 }
 
 async function loadCustomers(){
@@ -1420,11 +1356,9 @@ async function loadFirms(){
 
   rows.forEach((r, idx)=>{
     const name = str(r["firma"] ?? r["name"]).trim();
-    const address = buildFirmAddress(r);
-    const flags = getFirmProductFlags(r);
-    const base = getFirmBasePrices(r);
+    const ort  = str(r["ort"] ?? r["adresse"] ?? r["address"]).trim();
 
-    if(!address){
+    if(!ort){
       addMissing("firmen", name || "Firma", "Keine Adresse", `Zeile: ${idx+2}`);
       return;
     }
@@ -1432,13 +1366,16 @@ async function loadFirms(){
     list.push({
       id:"F"+idx,
       name: name || "Firma",
-      address,
-      base,
-      products: flags,
+      address: ort,
+      base:{
+        lose: toNum(r["preis"]),
+        sackware: toNum(r["sackwarenp"] ?? r["sackwarep"] ?? r["sackwarepreis"]),
+        industrieware: toNum(r["industriewal"] ?? r["industrieware"] ?? r["industriewar"] ?? r["industriewa"])
+      },
       stand: getStandFromRow(r),
-      sackInfo: str(pickRowField(r, ["sackware"], 9)).trim(),
-      certificateRaw: str(pickRowField(r, ["zertifikat","zertifikate","zertifikat(e)"], 8)).trim(),
-      certificates: normalizeCertificates(str(pickRowField(r, ["zertifikat","zertifikate","zertifikat(e)"], 8)).trim()),
+      sackInfo: str(r["sackware"]).trim(),
+      certificateRaw: str(r["zertifikat"] ?? r["zertifikate"] ?? r["zertifikat(e)"]).trim(),
+      certificates: normalizeCertificates(str(r["zertifikat"] ?? r["zertifikate"] ?? r["zertifikat(e)"]).trim()),
       lat: NaN, lon: NaN,
       raw: r
     });
@@ -1666,20 +1603,12 @@ function customerMatchesSelectedProduct(customer, product){
   if(product === "industrieware") return !!customer.accepts.industrieware;
   return true;
 }
-function firmMatchesSelectedProduct(firm, product){
-  if(!firm) return false;
-  if(product === "lose") return isFinite(firm.base?.lose) && firm.base.lose > 0;
-  if(product === "sackware") return !!firm.products?.sackware && isFinite(firm.base?.sackware) && firm.base.sackware > 0;
-  if(product === "industrieware") return !!firm.products?.industrieware && isFinite(firm.base?.industrieware) && firm.base.industrieware > 0;
-  return true;
-}
 function getVisibleCustomers(){
   const product = document.getElementById("product")?.value || "lose";
   return customers.filter(c => customerMatchesSelectedProduct(c, product));
 }
 function getVisibleFirms(){
-  const product = document.getElementById("product")?.value || "lose";
-  return firms.filter(f => matchesCertificateFilter(f) && firmMatchesSelectedProduct(f, product));
+  return firms.filter(matchesCertificateFilter);
 }
 
 function clearMarkerState(){
@@ -1755,7 +1684,6 @@ function renderMarkers(){
   firms.forEach(f=>{
     if(!isFinite(f.lat)||!isFinite(f.lon)) return;
     if(!matchesCertificateFilter(f)) return;
-    if(!firmMatchesSelectedProduct(f, inputs.product)) return;
 
     const isSelected = selectedFirm && selectedFirm.id === f.id;
     const isWarehouse = selectedWarehouse && selectedWarehouse.kind === "firma" && selectedWarehouse.ref.id === f.id;
@@ -1869,7 +1797,6 @@ function initUI(){
     clearMarkerState();
 
     const origin = getOrigin();
-
     if(getSearchType()==="kunden" && origin && !customerMatchesSelectedProduct(origin, document.getElementById("product").value)){
       selectedCustomer = null;
       updateOriginKpi(null);
@@ -1880,21 +1807,7 @@ function initUI(){
       document.getElementById("kpiCount").textContent = "—";
     }
 
-    if(getSearchType()==="firmen" && origin && !firmMatchesSelectedProduct(origin, document.getElementById("product").value)){
-      selectedFirm = null;
-      updateOriginKpi(null);
-      showOrdersForOrigin(null);
-      clearRoute();
-      hideDetail();
-      document.getElementById("results").innerHTML = "";
-      document.getElementById("kpiCount").textContent = "—";
-    }
-
     if(selectedWarehouse && selectedWarehouse.kind === "kunde" && !customerMatchesSelectedProduct(selectedWarehouse.ref, document.getElementById("product").value)){
-      selectedWarehouse = null;
-      updateWarehouseKpi();
-    }
-    if(selectedWarehouse && selectedWarehouse.kind === "firma" && !firmMatchesSelectedProduct(selectedWarehouse.ref, document.getElementById("product").value)){
       selectedWarehouse = null;
       updateWarehouseKpi();
     }
@@ -1926,9 +1839,6 @@ function initUI(){
       updateOriginKpi(selectedCustomer);
     }else{
       selectedCustomer = null;
-      if(selectedFirm && !firmMatchesSelectedProduct(selectedFirm, document.getElementById("product").value)){
-        selectedFirm = null;
-      }
       updateOriginKpi(selectedFirm);
     }
 
@@ -2074,7 +1984,7 @@ function selectCustomer(c){
 }
 
 function selectFirm(f){
-  if(!matchesCertificateFilter(f) || !firmMatchesSelectedProduct(f, document.getElementById("product").value)) return;
+  if(!matchesCertificateFilter(f)) return;
 
   selectedFirm = f;
   selectedCustomer = null;
@@ -2103,119 +2013,14 @@ function getInputs(){
   };
 }
 
-function makeRouteCacheKey(points){
-  return points.map(p => `${Number(p.lat).toFixed(5)},${Number(p.lon).toFixed(5)}`).join("|");
-}
-
-function buildRouteFromCache(cached){
-  if(!cached) return null;
-  return {
-    km: cached.km,
-    minutes: cached.minutes,
-    geometry: cached.geometry || null,
-    legs: cached.legs || null,
-    mode: cached.mode || "cache"
-  };
-}
-
-async function getRouteData(from, to){
-  const key = makeRouteCacheKey([from, to]);
-  if(routeCache[key]) return buildRouteFromCache(routeCache[key]);
-
-  try{
-    const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson`;
-    const res = await fetch(url);
-    const data = await res.json();
-
-    if(data && data.routes && data.routes[0]){
-      const r = data.routes[0];
-      const out = {
-        km: r.distance / 1000,
-        minutes: r.duration / 60,
-        geometry: r.geometry,
-        mode: "direct"
-      };
-      routeCache[key] = out;
-      saveLS(LS_ROUTE_CACHE_KEY, routeCache);
-      return out;
-    }
-  }catch(e){
-    console.error("Routing Fehler:", e);
-  }
-  return null;
-}
-
-async function getRouteDataViaWarehouse(start, warehouse, end){
-  const key = makeRouteCacheKey([start, warehouse, end]);
-  if(routeCache[key]) return buildRouteFromCache(routeCache[key]);
-
-  const leg1 = await getRouteData(start, warehouse);
-  await sleep(CONFIG.routingPauseMs);
-  const leg2 = await getRouteData(warehouse, end);
-
-  if(!leg1 || !leg2) return null;
-
-  const coords1 = Array.isArray(leg1.geometry?.coordinates) ? leg1.geometry.coordinates : [];
-  const coords2 = Array.isArray(leg2.geometry?.coordinates) ? leg2.geometry.coordinates : [];
-  const merged = coords1.length && coords2.length
-    ? coords1.concat(coords2.slice(1))
-    : [];
-
-  const out = {
-    km: (leg1.km || 0) + (leg2.km || 0),
-    minutes: (leg1.minutes || 0) + (leg2.minutes || 0),
-    geometry: { type:"LineString", coordinates: merged },
-    legs: [
-      { from:start, to:warehouse, km:leg1.km, minutes:leg1.minutes },
-      { from:warehouse, to:end, km:leg2.km, minutes:leg2.minutes }
-    ],
-    mode: "via_warehouse"
-  };
-
-  routeCache[key] = out;
-  saveLS(LS_ROUTE_CACHE_KEY, routeCache);
-  return out;
-}
-
-async function getRealRouteForPair(mode, origin, target, warehouse){
-  let start = origin;
-  let end = target;
-
-  if(mode === "kunden"){
-    start = target;
-    end = origin;
-  }
-
-  if(warehouse) return await getRouteDataViaWarehouse(start, warehouse, end);
-  return await getRouteData(start, end);
-}
-
-function getFirmBasePriceForProduct(firm, product){
-  const override = priceOverrides?.[firm.id]?.[product];
-  if(isFinite(override) && override > 0) return override;
-
-  if(product === "lose"){
-    return firm.base?.lose;
-  }
-  if(product === "sackware"){
-    return firm.base?.sackware;
-  }
-  if(product === "industrieware"){
-    return firm.base?.industrieware;
-  }
-  return NaN;
-}
-
-function computeDeliveredValues(base, km, inputs){
-  const freightPerT = (km * inputs.freightPerKm / inputs.qtyT) * inputs.factor;
-  const deliveredPerT = base + freightPerT;
-  const deliveredTotal = deliveredPerT * inputs.qtyT;
-  const marginPerT = isFinite(inputs.targetVk) ? (inputs.targetVk - deliveredPerT) : NaN;
-  return { freightPerT, deliveredPerT, deliveredTotal, marginPerT };
+function calcAirDistanceWithWarehouse(startEntity, endEntity, warehouseEntity){
+  if(!warehouseEntity) return haversineKm(startEntity.lat, startEntity.lon, endEntity.lat, endEntity.lon);
+  const leg1 = haversineKm(startEntity.lat, startEntity.lon, warehouseEntity.lat, warehouseEntity.lon);
+  const leg2 = haversineKm(warehouseEntity.lat, warehouseEntity.lon, endEntity.lat, endEntity.lon);
+  return leg1 + leg2;
 }
 
 async function calculate(){
-  const thisCalcToken = ++calcToken;
   const out = document.getElementById("results");
   out.innerHTML = "";
   hideDetail();
@@ -2226,7 +2031,7 @@ async function calculate(){
   const warehouse = getWarehouseRef();
 
   if(!origin || !isFinite(origin.lat) || !isFinite(origin.lon)){
-    out.innerHTML = `<div class="small">Bitte zuerst ${mode==="kunden" ? "einen Kunden" : "eine Firma"} auswählen und ggf. vorher geocoden.</div>`;
+    out.innerHTML = `<div class="small">Bitte zuerst ${mode==="kunden" ? "einen Kunden" : "eine Firma"} auswählen (ggf. einmal „Geocoden“ drücken).</div>`;
     document.getElementById("kpiCount").textContent = "—";
     updateMiniKpis({good:0, mid:0, bad:0});
     clearMarkerState();
@@ -2241,57 +2046,73 @@ async function calculate(){
   }
 
   const inputs = getInputs();
-  const {product, radiusKm, targetVk} = inputs;
+  const {product, radiusKm, qtyT, freightPerKm, factor, targetVk} = inputs;
 
-  document.getElementById("kpiQty").textContent = `Menge: ${fmt(inputs.qtyT,1)} t`;
-  document.getElementById("kpiRoute").textContent = "Berechnung läuft …";
-  document.getElementById("kpiRouteHint").textContent = warehouse
-    ? "Liste und Details rechnen mit derselben echten Strecke über Lager"
-    : "Liste und Details rechnen mit derselben echten Strecke";
+  document.getElementById("kpiQty").textContent = `Menge: ${fmt(qtyT,1)} t`;
+  document.getElementById("kpiRoute").textContent = "—";
+  document.getElementById("kpiRouteHint").textContent = warehouse ? "Klick lädt echte Strecke über Lager" : "Klick auf Zeile lädt echte Strecke";
 
-  const candidates = [];
+  const results = [];
 
-  if(mode === "kunden"){
+  if(mode==="kunden"){
     if(origin.accepts && origin.accepts[product] === false){
       out.innerHTML = `<div class="small">⚠️ <b>${esc(origin.name)}</b> nimmt <b>${esc(productLabel(product))}</b> nicht an.</div>`;
       document.getElementById("kpiCount").textContent = "0";
-      updateMiniKpis({good:0, mid:0, bad:0});
       clearMarkerState();
       renderMarkers();
-      document.getElementById("kpiRoute").textContent = "—";
       return;
     }
 
     for(const f of firms){
       if(!isFinite(f.lat)||!isFinite(f.lon)) continue;
       if(!matchesCertificateFilter(f)) continue;
-      if(!firmMatchesSelectedProduct(f, product)) continue;
       if(warehouse && warehouse.id === f.id) continue;
 
-      const directAir = haversineKm(f.lat, f.lon, origin.lat, origin.lon);
-      if(directAir > radiusKm) continue;
+      const kmAir = warehouse
+        ? calcAirDistanceWithWarehouse(f, origin, warehouse)
+        : haversineKm(origin.lat, origin.lon, f.lat, f.lon);
 
-      const base = getFirmBasePriceForProduct(f, product);
+      const kmFilter = warehouse
+        ? haversineKm(f.lat, f.lon, origin.lat, origin.lon)
+        : kmAir;
+
+      if(kmFilter > radiusKm) continue;
+
+      const override = priceOverrides?.[f.id]?.[product];
+      const base = isFinite(override) ? override : f.base[product];
       if(!isFinite(base) || base <= 0) continue;
 
-      candidates.push({
-        entity: f,
-        airKm: directAir,
-        base
+      const freightPerT = (kmAir * freightPerKm / qtyT) * factor;
+      const deliveredPerT = base + freightPerT;
+      const deliveredTotal = deliveredPerT * qtyT;
+      const marginPerT = isFinite(targetVk) ? (targetVk - deliveredPerT) : NaN;
+
+      results.push({
+        entity:f,
+        kmAir,
+        calcKm: kmAir,
+        base,
+        freightPerT,
+        deliveredPerT,
+        deliveredTotal,
+        marginPerT
       });
     }
   }else{
     const firm = origin;
-    const baseFirm = getFirmBasePriceForProduct(firm, product);
+    const overrideFirm = priceOverrides?.[firm.id]?.[product];
+    const baseFirm = isFinite(overrideFirm) ? overrideFirm : firm.base?.[product];
 
     if(!isFinite(baseFirm) || baseFirm <= 0){
-      out.innerHTML = `<div class="small">⚠️ Für <b>${esc(firm.name)}</b> fehlt der Preis für <b>${esc(productLabel(product))}</b>.</div>`;
+      out.innerHTML = `<div class="small">⚠️ Für <b>${esc(firm.name)}</b> fehlt Basis-Preis für <b>${esc(productLabel(product))}</b>. Rechtsklick Firma → Preis eingeben.</div>`;
       document.getElementById("kpiCount").textContent = "0";
-      updateMiniKpis({good:0, mid:0, bad:0});
       clearMarkerState();
       renderMarkers();
-      document.getElementById("kpiRoute").textContent = "—";
       return;
+    }
+
+    if(!zoneLayer){
+      out.innerHTML = `<div class="small" style="margin-bottom:10px;">ℹ️ Keine Zone gezeichnet. Tipp: <b>✏️ Zone</b> klicken und Bereich einzeichnen.</div>`;
     }
 
     for(const c of customers){
@@ -2300,4 +2121,471 @@ async function calculate(){
       if(zoneLayer && !pointInZone(c.lat, c.lon)) continue;
       if(warehouse && warehouse.id === c.id) continue;
 
-      const
+      const kmAir = warehouse
+        ? calcAirDistanceWithWarehouse(firm, c, warehouse)
+        : haversineKm(firm.lat, firm.lon, c.lat, c.lon);
+
+      const freightPerT = (kmAir * freightPerKm / qtyT) * factor;
+      const deliveredPerT = baseFirm + freightPerT;
+      const deliveredTotal = deliveredPerT * qtyT;
+      const marginPerT = isFinite(targetVk) ? (targetVk - deliveredPerT) : NaN;
+
+      results.push({
+        entity:c,
+        kmAir,
+        calcKm: kmAir,
+        base: baseFirm,
+        freightPerT,
+        deliveredPerT,
+        deliveredTotal,
+        marginPerT
+      });
+    }
+  }
+
+  results.sort((a,b)=>a.deliveredPerT - b.deliveredPerT);
+  lastResults = results;
+  document.getElementById("kpiCount").textContent = String(results.length);
+  updateMiniKpis(countMargins(results, targetVk));
+
+  hasCalculatedOnce = true;
+  rebuildMarkerState(results, targetVk);
+  renderMarkers();
+
+  if(!results.length){
+    out.innerHTML += `<div class="small">Keine Treffer gefunden.</div>`;
+    return;
+  }
+
+  const table = document.createElement("table");
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>${mode==="kunden" ? "Firma" : "Kunde"}</th>
+        <th>KM</th>
+        <th>Preis</th>
+        <th>${isFinite(targetVk) ? "Marge" : "Info"}</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  `;
+  const tbody = table.querySelector("tbody");
+
+  for(const row of results){
+    const ent = row.entity;
+    const certInfo = mode==="kunden"
+      ? `<br><span class="small">Zertifikat: ${esc((ent.certificates||[]).map(certificateLabel).join(", ") || "—")}</span>`
+      : "";
+
+    const routeInfo = warehouse
+      ? `<br><span class="small">über Lager: ${esc(warehouse.name)}</span>`
+      : "";
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>
+        <b>${esc(ent.name)}</b><br>
+        <span class="small">${esc(ent.address)} · Basis ${fmt(row.base)} €/t · Fracht ${fmt(row.freightPerT)} €/t</span>
+        ${certInfo}
+        ${routeInfo}
+      </td>
+      <td>${fmt(row.calcKm,0)}</td>
+      <td>
+        <b>${fmt(row.deliveredPerT)} €/t</b><br>
+        <span class="small">${fmt(row.deliveredTotal)} € für ${fmt(qtyT,1)} t</span>
+      </td>
+      <td>${makeBadge(row, targetVk)}</td>
+    `;
+
+    tr.addEventListener("click", async ()=>{
+      await showRouteDetails(origin, ent, row);
+    });
+
+    tbody.appendChild(tr);
+  }
+
+  out.appendChild(table);
+}
+
+function countMargins(results, targetVk){
+  const counts = {good:0, mid:0, bad:0};
+  if(!isFinite(targetVk)) return counts;
+  for(const r of results){
+    const m = r.marginPerT;
+    if(!isFinite(m)) continue;
+    if(m >= 10) counts.good++;
+    else if(m >= 0) counts.mid++;
+    else counts.bad++;
+  }
+  return counts;
+}
+function updateMiniKpis({good, mid, bad}){
+  document.getElementById("miniGood").textContent = String(good ?? 0);
+  document.getElementById("miniMid").textContent  = String(mid ?? 0);
+  document.getElementById("miniBad").textContent  = String(bad ?? 0);
+}
+function makeBadge(row, targetVk){
+  const cls = getRowColorClass(row, targetVk);
+
+  if(isFinite(targetVk)){
+    const m = row.marginPerT;
+    if(!isFinite(m)) return `<span class="badge">—</span>`;
+    if(cls === "good") return `<span class="badge good">+${fmt(m)} €/t</span>`;
+    if(cls === "mid")  return `<span class="badge mid">+${fmt(m)} €/t</span>`;
+    return `<span class="badge bad">${fmt(m)} €/t</span>`;
+  }else{
+    if(cls === "good") return `<span class="badge good">günstig</span>`;
+    if(cls === "mid")  return `<span class="badge mid">mittel</span>`;
+    if(cls === "bad")  return `<span class="badge bad">teuer</span>`;
+    return `<span class="badge">Klick für Route</span>`;
+  }
+}
+
+function clearRoute(){
+  if(routeLayer){
+    try{ map.removeLayer(routeLayer); }catch(e){}
+    routeLayer = null;
+  }
+  const el = document.getElementById("kpiRoute");
+  if(el) el.textContent = "—";
+}
+function hideDetail(){
+  document.getElementById("detailBox").style.display="none";
+  document.getElementById("detailGrid").innerHTML="";
+  document.getElementById("detailTitle").textContent="Details";
+  currentFocusedRow = null;
+}
+
+async function getRouteData(from, to){
+  try{
+    const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if(data && data.routes && data.routes[0]){
+      const r = data.routes[0];
+      return {
+        km: r.distance / 1000,
+        minutes: r.duration / 60,
+        geometry: r.geometry
+      };
+    }
+  }catch(e){
+    console.error("Routing Fehler:", e);
+  }
+  return null;
+}
+
+async function getRouteDataViaWarehouse(start, warehouse, end){
+  if(!warehouse) return null;
+
+  const leg1 = await getRouteData(start, warehouse);
+  const leg2 = await getRouteData(warehouse, end);
+
+  if(!leg1 || !leg2) return null;
+
+  const coords1 = Array.isArray(leg1.geometry?.coordinates) ? leg1.geometry.coordinates : [];
+  const coords2 = Array.isArray(leg2.geometry?.coordinates) ? leg2.geometry.coordinates : [];
+  const merged = coords1.length && coords2.length
+    ? coords1.concat(coords2.slice(1))
+    : [];
+
+  return {
+    km: (leg1.km || 0) + (leg2.km || 0),
+    minutes: (leg1.minutes || 0) + (leg2.minutes || 0),
+    geometry: { type:"LineString", coordinates: merged },
+    legs: [
+      { from:start, to:warehouse, km:leg1.km, minutes:leg1.minutes },
+      { from:warehouse, to:end, km:leg2.km, minutes:leg2.minutes }
+    ]
+  };
+}
+
+async function showRouteDetails(origin, target, baseRow){
+  clearRoute();
+  document.getElementById("kpiRoute").textContent = "Route lädt …";
+
+  const warehouse = getWarehouseRef();
+  const route = warehouse
+    ? await getRouteDataViaWarehouse(
+        getSearchType()==="kunden" ? target : origin,
+        warehouse,
+        getSearchType()==="kunden" ? origin : target
+      )
+    : await getRouteData(origin, target);
+
+  let usedKm = baseRow.calcKm;
+  let minutes = null;
+  let routeModeText = "Luftlinie-Fallback";
+  let leg1Km = NaN, leg2Km = NaN, leg1Min = NaN, leg2Min = NaN;
+
+  if(route && isFinite(route.km)){
+    usedKm = route.km;
+    minutes = route.minutes;
+    routeModeText = warehouse ? "echte Strecke über Lager" : "echte Strecke";
+
+    if(warehouse && Array.isArray(route.legs) && route.legs.length === 2){
+      leg1Km = route.legs[0].km;
+      leg1Min = route.legs[0].minutes;
+      leg2Km = route.legs[1].km;
+      leg2Min = route.legs[1].minutes;
+    }
+
+    if(route.geometry && route.geometry.coordinates){
+      const latlngs = route.geometry.coordinates.map(([lon, lat]) => [lat, lon]);
+      routeLayer = L.polyline(latlngs, {
+        color: getCss("--route") || "#2563eb",
+        weight: 5,
+        opacity: 0.9
+      }).addTo(map);
+
+      try{
+        map.fitBounds(routeLayer.getBounds(), {padding:[30,30]});
+      }catch(e){}
+    }
+  }
+
+  const inputs = getInputs();
+  const qtyT = inputs.qtyT;
+  const freightPerKm = inputs.freightPerKm;
+  const factor = inputs.factor;
+  const targetVk = inputs.targetVk;
+
+  const freightPerT = (usedKm * freightPerKm / qtyT) * factor;
+  const deliveredPerT = baseRow.base + freightPerT;
+  const deliveredTotal = deliveredPerT * qtyT;
+  const marginPerT = isFinite(targetVk) ? (targetVk - deliveredPerT) : NaN;
+
+  document.getElementById("kpiRoute").textContent =
+    `${fmt(usedKm,0)} km${isFinite(minutes) ? ` · ${fmt(minutes,0)} min` : ""}`;
+
+  currentFocusedRow = {
+    entity: target,
+    routeKm: usedKm,
+    durationMin: minutes,
+    base: baseRow.base,
+    freightPerT,
+    deliveredPerT,
+    deliveredTotal,
+    marginPerT,
+    routeModeText,
+    warehouseName: warehouse?.name || "",
+    leg1Km, leg2Km, leg1Min, leg2Min
+  };
+
+  showDetail(currentFocusedRow);
+}
+
+function showDetail(row){
+  const box = document.getElementById("detailBox");
+  const grid = document.getElementById("detailGrid");
+  const title = document.getElementById("detailTitle");
+  const qtyT = Math.max(0.1, toNum(document.getElementById("qtyT").value) || 24);
+  const targetVk = toNum(document.getElementById("targetVk").value);
+
+  title.textContent = `Details – ${row.entity.name}`;
+
+  const note = notesStore?.[row.entity.id] || "";
+  const marginTotal = isFinite(row.marginPerT) ? row.marginPerT * qtyT : NaN;
+  const certsText = row.entity.certificates ? row.entity.certificates.map(certificateLabel).join(", ") : "—";
+
+  grid.innerHTML = `
+    <div class="kv"><span class="k">Name</span><span class="v">${esc(row.entity.name)}</span></div>
+    <div class="kv"><span class="k">Adresse</span><span class="v">${esc(row.entity.address)}</span></div>
+
+    <div class="kv"><span class="k">KM</span><span class="v">${fmt(row.routeKm,2)} km</span></div>
+    <div class="kv"><span class="k">Fahrzeit</span><span class="v">${isFinite(row.durationMin) ? fmt(row.durationMin,0) + " min" : "—"}</span></div>
+
+    <div class="kv"><span class="k">Basispreis</span><span class="v">${fmt(row.base)} €/t</span></div>
+    <div class="kv"><span class="k">Fracht</span><span class="v">${fmt(row.freightPerT)} €/t</span></div>
+
+    <div class="kv"><span class="k">Preis / t</span><span class="v">${fmt(row.deliveredPerT)} €/t</span></div>
+    <div class="kv"><span class="k">Gesamtpreis</span><span class="v">${fmt(row.deliveredTotal)} €</span></div>
+
+    <div class="kv"><span class="k">Menge</span><span class="v">${fmt(qtyT,1)} t</span></div>
+    <div class="kv"><span class="k">Ziel-VK</span><span class="v">${isFinite(targetVk) ? fmt(targetVk) + " €/t" : "—"}</span></div>
+
+    <div class="kv"><span class="k">Marge / t</span><span class="v">${isFinite(row.marginPerT) ? fmt(row.marginPerT) + " €/t" : "—"}</span></div>
+    <div class="kv"><span class="k">Marge gesamt</span><span class="v">${isFinite(marginTotal) ? fmt(marginTotal) + " €" : "—"}</span></div>
+
+    <div class="kv"><span class="k">Zertifikat</span><span class="v">${esc(certsText)}</span></div>
+    <div class="kv"><span class="k">Routing</span><span class="v">${esc(row.routeModeText || "—")}</span></div>
+
+    <div class="kv"><span class="k">Lager</span><span class="v">${row.warehouseName ? esc(row.warehouseName) : "—"}</span></div>
+    <div class="kv"><span class="k">Stand</span><span class="v">${esc(row.entity.stand || "—")}</span></div>
+
+    <div class="kv"><span class="k">Teilroute 1</span><span class="v">${isFinite(row.leg1Km) ? fmt(row.leg1Km,2) + " km" : "—"}</span></div>
+    <div class="kv"><span class="k">Teilroute 2</span><span class="v">${isFinite(row.leg2Km) ? fmt(row.leg2Km,2) + " km" : "—"}</span></div>
+
+    <div class="kv"><span class="k">Zeit Teilroute 1</span><span class="v">${isFinite(row.leg1Min) ? fmt(row.leg1Min,0) + " min" : "—"}</span></div>
+    <div class="kv"><span class="k">Zeit Teilroute 2</span><span class="v">${isFinite(row.leg2Min) ? fmt(row.leg2Min,0) + " min" : "—"}</span></div>
+
+    <div class="kv"><span class="k">Notiz</span><span class="v">${note ? esc(note) : "—"}</span></div>
+    <div class="kv"><span class="k"></span><span class="v"></span></div>
+  `;
+
+  box.style.display="block";
+}
+
+function showOrdersForOrigin(origin){
+  const box = document.getElementById("ordersBox");
+  const title = document.getElementById("ordersTitle");
+  const listEl = document.getElementById("ordersList");
+
+  if(!origin || !deliveriesLoaded){
+    box.style.display = "none";
+    return;
+  }
+
+  const mode = getSearchType();
+  if(mode === "kunden"){
+    const list = deliveriesByCustomer.get(normText(origin.name)) || [];
+    if(!list.length){
+      box.style.display = "none";
+      return;
+    }
+    title.textContent = "Aufträge";
+    listEl.innerHTML = list.slice(0,12).map(x=>`• ${esc(x.firma)} — ${fmt(x.anzahl,0)}x`).join("<br>");
+  }else{
+    const list = deliveriesByFirm.get(normText(origin.name)) || [];
+    if(!list.length){
+      box.style.display = "none";
+      return;
+    }
+    title.textContent = "Aufträge";
+    listEl.innerHTML = list.slice(0,12).map(x=>`• ${esc(x.kunde)} — ${fmt(x.anzahl,0)}x`).join("<br>");
+  }
+
+  box.style.display = "block";
+}
+
+function initPanelDragDesktopOnly(){
+  const panel = document.getElementById("panel");
+  const header = document.getElementById("panelHeader");
+
+  const pos = loadLS(LS_PANEL_POS_KEY, null);
+  if(pos && isFinite(pos.x) && isFinite(pos.y)){
+    panel.style.left = pos.x+"px";
+    panel.style.top  = pos.y+"px";
+    panel.style.right = "auto";
+  }
+
+  let dragging=false, sx=0, sy=0, sl=0, st=0;
+  header.addEventListener("mousedown",(e)=>{
+    if(window.matchMedia("(max-width: 760px)").matches) return;
+    dragging=true;
+    const r = panel.getBoundingClientRect();
+    sx=e.clientX; sy=e.clientY; sl=r.left; st=r.top;
+    panel.style.right="auto";
+    e.preventDefault();
+  });
+
+  window.addEventListener("mousemove",(e)=>{
+    if(!dragging) return;
+    const x = Math.max(6, sl + (e.clientX-sx));
+    const y = Math.max(6, st + (e.clientY-sy));
+    panel.style.left = x+"px";
+    panel.style.top  = y+"px";
+  });
+
+  window.addEventListener("mouseup",()=>{
+    if(!dragging) return;
+    dragging=false;
+    const r = panel.getBoundingClientRect();
+    saveLS(LS_PANEL_POS_KEY, {x:r.left, y:r.top});
+  });
+}
+
+function updateOriginKpi(origin){
+  const mode = getSearchType();
+  document.getElementById("kpiOriginLabel").textContent = (mode==="kunden") ? "Kunde" : "Firma";
+
+  if(!origin){
+    document.getElementById("kpiCustomer").textContent = "—";
+    document.getElementById("kpiCustomerAddr").textContent = "—";
+    document.getElementById("kpiCount").textContent = "—";
+    document.getElementById("kpiRoute").textContent = "—";
+    document.getElementById("kpiQty").textContent = "Menge: —";
+    document.getElementById("ordersBox").style.display = "none";
+    return;
+  }
+  document.getElementById("kpiCustomer").textContent = origin.name || "—";
+  document.getElementById("kpiCustomerAddr").textContent = origin.address || "—";
+  document.getElementById("kpiRoute").textContent = "—";
+}
+
+function isYes(v){
+  const s = String(v ?? "").trim().toLowerCase();
+  return s === "ja" || s === "yes" || s === "y" || s === "1" || s === "true" || s === "ok";
+}
+function normText(s){
+  return String(s||"")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g," ")
+    .replace(/[.,;:_/\\|()\-–—]/g,"")
+    .replace(/ä/g,"ae").replace(/ö/g,"oe").replace(/ü/g,"ue").replace(/ß/g,"ss");
+}
+function getStandFromRow(r){
+  const direct = str(r["stand"]).trim();
+  if(direct) return direct;
+  if(Array.isArray(r["__parsed_extra"]) && r["__parsed_extra"].length){
+    const v = str(r["__parsed_extra"][0]).trim();
+    if(v) return v;
+  }
+  for(const k of Object.keys(r)){
+    if(String(k).trim()===""){
+      const v = str(r[k]).trim();
+      if(v) return v;
+    }
+  }
+  return "";
+}
+function toInt(v){
+  const n = parseInt(String(v ?? "").trim(), 10);
+  return Number.isFinite(n) ? n : 0;
+}
+function toNum(v){
+  if(v===null || v===undefined) return NaN;
+  if(typeof v==="number") return v;
+  let s = String(v).trim();
+  if(!s) return NaN;
+  s = s.replace(/[€\s]/g, "");
+  const hasComma = s.includes(",");
+  const hasDot   = s.includes(".");
+  if(hasComma && hasDot) s = s.replace(/\./g, "").replace(",", ".");
+  else if(hasComma && !hasDot) s = s.replace(",", ".");
+  else s = s.replace(/,/g, "");
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : NaN;
+}
+function str(v){ return (v===null||v===undefined) ? "" : String(v); }
+function fmt(n, dec=2){
+  if(!isFinite(n)) return "—";
+  return n.toFixed(dec).replace(".", ",");
+}
+function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
+function esc(s){
+  return String(s).replace(/[&<>"']/g, m=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[m]));
+}
+function productLabel(p){
+  if(p==="lose") return "Lose";
+  if(p==="sackware") return "Sackware";
+  if(p==="industrieware") return "Industrieware";
+  return p;
+}
+function haversineKm(lat1, lon1, lat2, lon2){
+  const R = 6371;
+  const toRad = d => d * Math.PI/180;
+  const dLat = toRad(lat2-lat1);
+  const dLon = toRad(lon2-lon1);
+  const a =
+    Math.sin(dLat/2)**2 +
+    Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*(Math.sin(dLon/2)**2);
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+</script>
+</body>
+</html>
