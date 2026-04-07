@@ -63,8 +63,23 @@
       --firm-outline:#e5e7eb;
     }
 
-    html,body{height:100%;margin:0;background:var(--ui-bg);overscroll-behavior:none;}
-    #map{position:absolute;inset:0;width:100%;height:100%;background:#d1d5db;}
+    *{ box-sizing:border-box; }
+
+    html,body{
+      height:100%;
+      margin:0;
+      background:var(--ui-bg);
+      overscroll-behavior:none;
+    }
+
+    #map{
+      position:fixed;
+      inset:0;
+      width:100%;
+      height:100%;
+      background:#d1d5db;
+      z-index:1;
+    }
 
     .topbar{
       position:fixed; top:0; left:0; right:0; z-index:3000;
@@ -135,7 +150,6 @@
       font:14px/1.2 system-ui,Arial;
       color:var(--ui-text);
       max-height:260px;
-      overflow:auto;
       min-width:320px;
       display:none;
     }
@@ -693,12 +707,12 @@ const CONFIG = {
   geocodeDelayMs: 1100
 };
 
-const LS_GEO_CACHE_KEY = "salesMap_geoCache_v18";
-const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v16";
-const LS_PANEL_POS_KEY = "salesMap_panelPos_v16";
-const LS_THEME_KEY = "salesMap_theme_v10";
-const LS_NOTES_KEY = "salesMap_notes_v6";
-const LS_ZONE_GEOJSON_KEY = "salesMap_zone_geojson_v6";
+const LS_GEO_CACHE_KEY = "salesMap_geoCache_v18_fix1";
+const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v16_fix1";
+const LS_PANEL_POS_KEY = "salesMap_panelPos_v16_fix1";
+const LS_THEME_KEY = "salesMap_theme_v10_fix1";
+const LS_NOTES_KEY = "salesMap_notes_v6_fix1";
+const LS_ZONE_GEOJSON_KEY = "salesMap_zone_geojson_v6_fix1";
 
 const missing = { firmen: [], kunden: [], auftraege: [] };
 let activeMissTab = "firmen";
@@ -736,16 +750,22 @@ window.addEventListener("load", ()=>init().catch(err=>{
 
 async function init(){
   applyThemeFromLS();
+
   if(!window.L) throw new Error("Leaflet (L) nicht geladen.");
 
-  map = L.map("map", { worldCopyJump:true }).setView([51.2, 10.4], 6);
+  map = L.map("map", {
+    worldCopyJump:true,
+    zoomControl:true,
+    preferCanvas:true
+  }).setView([51.2, 10.4], 6);
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
     attribution: "&copy; OpenStreetMap contributors"
   }).addTo(map);
 
-  setTimeout(()=>map.invalidateSize(), 80);
+  setTimeout(()=>map.invalidateSize(), 250);
+  window.addEventListener("resize", ()=>{ if(map) map.invalidateSize(); });
 
   initZoneTools();
   initPanelDragDesktopOnly();
@@ -784,6 +804,7 @@ function applyResponsiveLayout(){
     panel.style.left = "";
     panel.style.top = "";
     panel.style.right = "";
+    setTimeout(()=>map && map.invalidateSize(), 60);
   }else{
     const pos = loadLS(LS_PANEL_POS_KEY, null);
     if(pos && isFinite(pos.x) && isFinite(pos.y)){
@@ -796,6 +817,7 @@ function applyResponsiveLayout(){
       panel.style.right = "12px";
     }
     panel.classList.remove("collapsed");
+    setTimeout(()=>map && map.invalidateSize(), 60);
   }
 }
 
@@ -1000,6 +1022,7 @@ function initMobileUI(){
     if(e.target && e.target.id === "closePanel") return;
     if(!isMobile) return;
     document.getElementById("panel").classList.toggle("collapsed");
+    setTimeout(()=>map && map.invalidateSize(), 60);
   });
 }
 function syncMobileSelect(masterId, mobileId){
@@ -1584,7 +1607,7 @@ function customerTriangleIcon(selected=false, fillColor=null){
       border-right:${Math.round(size*0.55)}px solid transparent;
       border-bottom:${size}px solid ${color};
       filter:${selected
-        ? "drop-shadow(0 0 0 3px var(--highlight-ring)) drop-shadow(0 4px 10px rgba(2,6,23,.28))"
+        ? "drop-shadow(0 0 0 3px rgba(225,29,72,.22)) drop-shadow(0 4px 10px rgba(2,6,23,.28))"
         : "drop-shadow(0 3px 6px rgba(2,6,23,.25))"};
     "></div>`,
     className:"",
@@ -1646,8 +1669,8 @@ function rebuildMarkerState(results, targetVk){
 }
 
 function renderMarkers(){
-  customerMarkers.forEach(m=>m.remove());
-  firmMarkers.forEach(m=>m.remove());
+  customerMarkers.forEach(m=>{ try{ map.removeLayer(m); }catch(e){} });
+  firmMarkers.forEach(m=>{ try{ map.removeLayer(m); }catch(e){} });
   customerMarkers=[]; firmMarkers=[];
 
   const inputs = getInputs();
@@ -1707,8 +1730,6 @@ function renderMarkers(){
     m.on("contextmenu", (e)=>openFirmPriceAndNotePopup(f, e.latlng));
     firmMarkers.push(m);
   });
-
-  updateLoadStatusCounts();
 }
 
 function openFirmPriceAndNotePopup(firm, latlng){
@@ -2175,7 +2196,7 @@ async function calculate(){
       : "";
 
     const routeInfo = warehouse
-      ? `<br><span class="small">über Lager: ${esc(warehouse.name)}</span>`
+      ? `<br><span class="small">über Lager: ${esc(selectedWarehouse?.name || "")}</span>`
       : "";
 
     const tr = document.createElement("tr");
