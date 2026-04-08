@@ -666,7 +666,7 @@
       <b>Modus Kunden:</b> Kunde auswählen → Firmen-Vorschläge.
       <br><b>Modus Firmen:</b> Firma auswählen → Kunden-Vorschläge.
       <br><b>Lager:</b> Optionaler Zwischenpunkt für Firma → Lager → Kunde.
-      <br><b>Route:</b> Echte Strecke wird direkt berechnet.
+      <br><b>Route:</b> Nur echte Strecke. Keine Luftlinie.
     </div>
 
     <div id="results"></div>
@@ -704,7 +704,11 @@ const CONFIG = {
   firmsCsvUrl: "https://docs.google.com/spreadsheets/d/1f1oD1TlYWPRbD12d05yIGkqmXVygVt3ZHLk9U0bKoTs/gviz/tq?tqx=out:csv&gid=0",
   customersCsvUrl: "https://docs.google.com/spreadsheets/d/1DaiLyZbhJkdSQ1PHbJQmguIrDnGrrhiAVgJC4PJO8vA/gviz/tq?tqx=out:csv&gid=0",
   deliveriesCsvUrl: "https://docs.google.com/spreadsheets/d/1fcvlM2BUDpoV-HDyPtgDf_1ZqWql6MdEMbisR0eqYYw/gviz/tq?tqx=out:csv&gid=0",
-  geocodeDelayMs: 1100
+  geocodeDelayMs: 1100,
+  routeTimeoutMs: 15000,
+  routeRetryCount: 2,
+  routeRetryDelayMs: 500,
+  routeConcurrency: 2
 };
 
 const LS_GEO_CACHE_KEY = "salesMap_geoCache_v20";
@@ -713,7 +717,7 @@ const LS_PANEL_POS_KEY = "salesMap_panelPos_v18";
 const LS_THEME_KEY = "salesMap_theme_v12";
 const LS_NOTES_KEY = "salesMap_notes_v8";
 const LS_ZONE_GEOJSON_KEY = "salesMap_zone_geojson_v8";
-const LS_ROUTE_CACHE_KEY = "salesMap_routeCache_v1";
+const LS_ROUTE_CACHE_KEY = "salesMap_routeCache_v3";
 
 const missing = { firmen: [], kunden: [], auftraege: [] };
 let activeMissTab = "firmen";
@@ -2070,13 +2074,6 @@ function getInputs(){
   };
 }
 
-function calcAirDistanceWithWarehouse(startEntity, endEntity, warehouseEntity){
-  if(!warehouseEntity) return haversineKm(startEntity.lat, startEntity.lon, endEntity.lat, endEntity.lon);
-  const leg1 = haversineKm(startEntity.lat, startEntity.lon, warehouseEntity.lat, warehouseEntity.lon);
-  const leg2 = haversineKm(warehouseEntity.lat, warehouseEntity.lon, endEntity.lat, endEntity.lon);
-  return leg1 + leg2;
-}
-
 async function calculate(){
   const out = document.getElementById("results");
   out.innerHTML = "";
@@ -2107,7 +2104,7 @@ async function calculate(){
 
   document.getElementById("kpiQty").textContent = `Menge: ${fmt(qtyT,1)} t`;
   document.getElementById("kpiRoute").textContent = "—";
-  document.getElementById("kpiRouteHint").textContent = warehouse ? "KM und Route über Lager" : "KM und Route direkt";
+  document.getElementById("kpiRouteHint").textContent = warehouse ? "Nur echte Route über Lager" : "Nur echte Route";
 
   const candidates = [];
 
@@ -2123,7 +2120,6 @@ async function calculate(){
     for(const f of firms){
       if(!isFinite(f.lat)||!isFinite(f.lon)) continue;
       if(!matchesCertificateFilter(f)) continue;
-      if(warehouse && warehouse.id === f.id) continue;
       if(warehouse && warehouse.ref && warehouse.ref.id === f.id) continue;
 
       const kmFilter = haversineKm(f.lat, f.lon, origin.lat, origin.lon);
@@ -2133,10 +2129,7 @@ async function calculate(){
       const base = isFinite(override) ? override : f.base[product];
       if(!isFinite(base) || base <= 0) continue;
 
-      candidates.push({
-        entity: f,
-        base
-      });
+      candidates.push({ entity: f, base });
     }
   }else{
     const firm = origin;
@@ -2159,23 +2152,26 @@ async function calculate(){
       if(!isFinite(c.lat)||!isFinite(c.lon)) continue;
       if(!customerMatchesSelectedProduct(c, product)) continue;
       if(zoneLayer && !pointInZone(c.lat, c.lon)) continue;
-      if(warehouse && warehouse.id === c.id) continue;
       if(warehouse && warehouse.ref && warehouse.ref.id === c.id) continue;
 
-      candidates.push({
-        entity: c,
-        base: baseFirm
-      });
+      candidates.push({ entity: c, base: baseFirm });
     }
   }
 
-  const results = await runWithConcurrency(candidates, 6, async (item) => {
+  if(!candidates.length){
+    document.getElementById("kpiCount").textContent = "0";
+    updateMiniKpis({good:0, mid:0, bad:0});
+    clearMarkerState();
+    renderMarkers();
+    out.innerHTML += `<div class="small">Keine Treffer gefunden.</div>`;
+    return;
+  }
+
+  out.innerHTML += `<div class="small" style="margin-bottom:8px;">Route wird berechnet … nur echte Strecke.</div>`;
+
+  const routed = await runWithConcurrency(candidates, CONFIG.routeConcurrency, async (item) => {
     const ent = item.entity;
     let route = null;
-    let usedKm = NaN;
-    let minutes = NaN;
-    let routeModeText = "Luftlinie-Fallback";
-    let leg1Km = NaN, leg2Km = NaN, leg1Min = NaN, leg2Min = NaN;
 
     if(mode === "kunden"){
       route = warehouse
@@ -2187,42 +2183,30 @@ async function calculate(){
         : await getRouteData(origin, ent);
     }
 
-    if(route && isFinite(route.km)){
-      usedKm = route.km;
-      minutes = route.minutes;
-      routeModeText = warehouse ? "echte Strecke über Lager" : "echte Strecke";
+    if(!route || !isFinite(route.km)) return null;
 
-      if(warehouse && Array.isArray(route.legs) && route.legs.length === 2){
-        leg1Km = route.legs[0].km;
-        leg1Min = route.legs[0].minutes;
-        leg2Km = route.legs[1].km;
-        leg2Min = route.legs[1].minutes;
-      }
-    }else{
-      if(mode === "kunden"){
-        usedKm = warehouse
-          ? calcAirDistanceWithWarehouse(ent, origin, warehouse)
-          : haversineKm(ent.lat, ent.lon, origin.lat, origin.lon);
-      }else{
-        usedKm = warehouse
-          ? calcAirDistanceWithWarehouse(origin, ent, warehouse)
-          : haversineKm(origin.lat, origin.lon, ent.lat, ent.lon);
-      }
-    }
-
+    const usedKm = route.km;
+    const minutes = route.minutes;
     const freightOnlyPerT = ((usedKm * freightPerKm) / qtyT);
     const deliveredPerT = (item.base + freightOnlyPerT) * factor;
     const deliveredTotal = deliveredPerT * qtyT;
     const marginPerT = isFinite(targetVk) ? (targetVk - deliveredPerT) : NaN;
 
+    let leg1Km = NaN, leg2Km = NaN, leg1Min = NaN, leg2Min = NaN;
+    if(warehouse && Array.isArray(route.legs) && route.legs.length === 2){
+      leg1Km = route.legs[0].km;
+      leg2Km = route.legs[1].km;
+      leg1Min = route.legs[0].minutes;
+      leg2Min = route.legs[1].minutes;
+    }
+
     return {
       entity: ent,
-      kmAir: usedKm,
       calcKm: usedKm,
       routeKm: usedKm,
       durationMin: minutes,
       routeData: route,
-      routeModeText,
+      routeModeText: warehouse ? "echte Strecke über Lager" : "echte Strecke",
       leg1Km, leg2Km, leg1Min, leg2Min,
       base: item.base,
       freightPerT: freightOnlyPerT,
@@ -2232,8 +2216,10 @@ async function calculate(){
     };
   });
 
+  const results = routed.filter(Boolean);
   results.sort((a,b)=>a.deliveredPerT - b.deliveredPerT);
   lastResults = results;
+
   document.getElementById("kpiCount").textContent = String(results.length);
   updateMiniKpis(countMargins(results, targetVk));
 
@@ -2242,7 +2228,7 @@ async function calculate(){
   renderMarkers();
 
   if(!results.length){
-    out.innerHTML += `<div class="small">Keine Treffer gefunden.</div>`;
+    out.innerHTML = `<div class="small">Keine Treffer mit echter Route gefunden.</div>`;
     return;
   }
 
@@ -2293,6 +2279,7 @@ async function calculate(){
     tbody.appendChild(tr);
   }
 
+  out.innerHTML = "";
   out.appendChild(table);
 }
 
@@ -2345,27 +2332,52 @@ function hideDetail(){
   currentFocusedRow = null;
 }
 
-async function getRouteData(from, to){
-  const cached = getCachedRoute(from, to);
-  if(cached) return cached;
+async function fetchJsonWithTimeout(url, timeoutMs){
+  const controller = new AbortController();
+  const timer = setTimeout(()=>controller.abort(), timeoutMs);
 
   try{
-    const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson`;
-    const res = await fetch(url);
-    const data = await res.json();
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { "Accept":"application/json" }
+    });
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
-    if(data && data.routes && data.routes[0]){
-      const r = data.routes[0];
-      const out = {
-        km: r.distance / 1000,
-        minutes: r.duration / 60,
-        geometry: r.geometry
-      };
-      setCachedRoute(from, to, out);
-      return out;
+async function getRouteData(from, to){
+  if(!from || !to) return null;
+  if(!isFinite(from.lat) || !isFinite(from.lon) || !isFinite(to.lat) || !isFinite(to.lon)) return null;
+
+  const cached = getCachedRoute(from, to);
+  if(cached && isFinite(cached.km)) return cached;
+
+  const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson`;
+
+  for(let attempt = 0; attempt <= CONFIG.routeRetryCount; attempt++){
+    try{
+      const data = await fetchJsonWithTimeout(url, CONFIG.routeTimeoutMs);
+
+      if(data && data.routes && data.routes[0]){
+        const r = data.routes[0];
+        const out = {
+          km: r.distance / 1000,
+          minutes: r.duration / 60,
+          geometry: r.geometry
+        };
+        setCachedRoute(from, to, out);
+        return out;
+      }
+    }catch(e){
+      if(attempt >= CONFIG.routeRetryCount){
+        console.warn("Routing Fehler:", e);
+      }else{
+        await sleep(CONFIG.routeRetryDelayMs);
+      }
     }
-  }catch(e){
-    console.error("Routing Fehler:", e);
   }
   return null;
 }
@@ -2374,12 +2386,15 @@ async function getRouteDataViaWarehouse(start, warehouse, end){
   if(!warehouse) return null;
 
   const cached = getCachedRouteVia(start, warehouse, end);
-  if(cached) return cached;
+  if(cached && isFinite(cached.km)) return cached;
 
   const leg1 = await getRouteData(start, warehouse);
-  const leg2 = await getRouteData(warehouse, end);
+  if(!leg1) return null;
 
-  if(!leg1 || !leg2) return null;
+  await sleep(120);
+
+  const leg2 = await getRouteData(warehouse, end);
+  if(!leg2) return null;
 
   const coords1 = Array.isArray(leg1.geometry?.coordinates) ? leg1.geometry.coordinates : [];
   const coords2 = Array.isArray(leg2.geometry?.coordinates) ? leg2.geometry.coordinates : [];
@@ -2414,35 +2429,33 @@ async function showRouteDetails(origin, target, baseRow){
       )
     : await getRouteData(origin, target);
 
-  let usedKm = baseRow.calcKm;
-  let minutes = null;
-  let routeModeText = "Luftlinie-Fallback";
+  if(!route || !isFinite(route.km)){
+    document.getElementById("kpiRoute").textContent = "Keine Route";
+    return;
+  }
+
+  const usedKm = route.km;
+  const minutes = route.minutes;
   let leg1Km = NaN, leg2Km = NaN, leg1Min = NaN, leg2Min = NaN;
 
-  if(route && isFinite(route.km)){
-    usedKm = route.km;
-    minutes = route.minutes;
-    routeModeText = warehouse ? "echte Strecke über Lager" : "echte Strecke";
+  if(warehouse && Array.isArray(route.legs) && route.legs.length === 2){
+    leg1Km = route.legs[0].km;
+    leg1Min = route.legs[0].minutes;
+    leg2Km = route.legs[1].km;
+    leg2Min = route.legs[1].minutes;
+  }
 
-    if(warehouse && Array.isArray(route.legs) && route.legs.length === 2){
-      leg1Km = route.legs[0].km;
-      leg1Min = route.legs[0].minutes;
-      leg2Km = route.legs[1].km;
-      leg2Min = route.legs[1].minutes;
-    }
+  if(route.geometry && route.geometry.coordinates){
+    const latlngs = route.geometry.coordinates.map(([lon, lat]) => [lat, lon]);
+    routeLayer = L.polyline(latlngs, {
+      color: getCss("--route") || "#2563eb",
+      weight: 5,
+      opacity: 0.9
+    }).addTo(map);
 
-    if(route.geometry && route.geometry.coordinates){
-      const latlngs = route.geometry.coordinates.map(([lon, lat]) => [lat, lon]);
-      routeLayer = L.polyline(latlngs, {
-        color: getCss("--route") || "#2563eb",
-        weight: 5,
-        opacity: 0.9
-      }).addTo(map);
-
-      try{
-        map.fitBounds(routeLayer.getBounds(), {padding:[30,30]});
-      }catch(e){}
-    }
+    try{
+      map.fitBounds(routeLayer.getBounds(), {padding:[30,30]});
+    }catch(e){}
   }
 
   const inputs = getInputs();
@@ -2468,7 +2481,7 @@ async function showRouteDetails(origin, target, baseRow){
     deliveredPerT,
     deliveredTotal,
     marginPerT,
-    routeModeText,
+    routeModeText: warehouse ? "echte Strecke über Lager" : "echte Strecke",
     warehouseName: warehouse?.name || "",
     leg1Km, leg2Km, leg1Min, leg2Min
   };
