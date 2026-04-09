@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+}<!DOCTYPE html>
 <html lang="de">
 <head>
   <meta charset="utf-8"/>
@@ -209,14 +209,30 @@ function getFirmLosePriceFromF(r){return toNum(pickRowField(r,["preis","f"],5))}
 function getFirmSackPriceFromH(r){return toNum(pickRowField(r,["sackwarenpreis","sackwarepreis","sackwarenp","sackwarep","h"],7))}
 function getFirmSackwareFromJ(r){return str(pickRowField(r,["sackware","j"],9)).trim()}
 function getFirmIndustryPriceFromK(r){return toNum(pickRowField(r,["industriewarepreis","industriepreis","k"],10))}
-function firmHasProduct(firm,product){if(product==="lose") return isFinite(firm.base.lose)&&firm.base.lose>0; if(product==="sackware") return firm.sackInfo!==""&&isFinite(firm.base.sackware)&&firm.base.sackware>0; if(product==="industrieware") return isFinite(firm.base.industrieware)&&firm.base.industrieware>0; return false}
+function firmHasProduct(firm,product){
+  if(product==="lose") return isFinite(firm.base.lose) && firm.base.lose > 0;
+  if(product==="sackware") return isFinite(firm.base.sackware) && firm.base.sackware > 0;
+  if(product==="industrieware") return isFinite(firm.base.industrieware) && firm.base.industrieware > 0;
+  return false;
+}
 async function loadCustomers(){const rows=await parseCsv(CONFIG.customersCsvUrl); customers=[]; rows.forEach((r,idx)=>{const name=str((r["name"] || r["kundenname"] || r["kunde"] || r["firma"] || r["unternehmen"] || "")).trim(); const addr=buildCustomerAddress(r); if(!addr){addMissing("kunden",name||"Kunde","Keine Adresse",`Zeile: ${idx+2}`); return;} customers.push({id:"C"+idx,name:name||addr||"Kunde",address:addr,lat:NaN,lon:NaN,accepts:getCustomerAcceptsFromRow(r),raw:r});});}
 async function loadFirms(){const rows=await parseCsv(CONFIG.firmsCsvUrl); firms=[]; rows.forEach((r,idx)=>{const name=str((r["firma"] || r["name"] || pickRowField(r,["a"],0) || "")).trim(); const address=buildFirmAddress(r); const losePrice=getFirmLosePriceFromF(r), sackPrice=getFirmSackPriceFromH(r), sackInfo=getFirmSackwareFromJ(r), industryPrice=getFirmIndustryPriceFromK(r); if(!address){addMissing("firmen",name||"Firma","Keine Adresse",`Zeile: ${idx+2}`); return;} firms.push({id:"F"+idx,name:name||"Firma",address,base:{lose:losePrice,sackware:sackPrice,industrieware:industryPrice},stand:getStandFromRow(r),sackInfo,industryInfo:isFinite(industryPrice)&&industryPrice>0?"ja":"",certificateRaw:str((r["zertifikat"] || r["zertifikate"] || r["zertifikat(e)"] || pickRowField(r,["i"],8) || "")).trim(),certificates:normalizeCertificates(str((r["zertifikat"] || r["zertifikate"] || r["zertifikat(e)"] || pickRowField(r,["i"],8) || "")).trim()),lat:NaN,lon:NaN,raw:r});});}
 async function loadDeliveries(){try{const rows=await parseCsv(CONFIG.deliveriesCsvUrl); deliveriesAgg=rows.map((r,idx)=>({kunde:str(r["kunde"]).trim(),firma:str(r["firma"]).trim(),anzahl:toInt(r["anzahl"]),_row:idx+2})).filter(x=>x.kunde&&x.firma); deliveriesByCustomer=new Map(); deliveriesByFirm=new Map(); for(const d of deliveriesAgg){const k=normText(d.kunde),f=normText(d.firma); if(!deliveriesByCustomer.has(k)) deliveriesByCustomer.set(k,[]); deliveriesByCustomer.get(k).push({firma:d.firma,anzahl:d.anzahl}); if(!deliveriesByFirm.has(f)) deliveriesByFirm.set(f,[]); deliveriesByFirm.get(f).push({kunde:d.kunde,anzahl:d.anzahl});} deliveriesLoaded=true;}catch(e){deliveriesLoaded=false; deliveriesAgg=[]; deliveriesByCustomer=new Map(); deliveriesByFirm=new Map();}}
 function normalizeCertificateValue(v){let s=String(v||"").trim().toLowerCase(); if(!s) return ""; s=s.replace(/\s+/g," "); if(["enplus","en plus","en-plus"].includes(s)) return "enplus"; if(["dinplus","din plus","din-plus"].includes(s)) return "dinplus"; if(s==="sure") return "sure"; if(s==="cpp") return "cpp"; if(["kein zertifikat","ohne zertifikat","keine","kein","ohne"].includes(s)) return "kein zertifikat"; return s}
 function normalizeCertificates(raw){const txt=String(raw||"").trim(); if(!txt) return ["kein zertifikat"]; const out=txt.split(/[,;/|]+/).map(normalizeCertificateValue).filter(Boolean); return out.length?[...new Set(out)]:["kein zertifikat"]}
 function getSelectedCertificates(){return [...document.querySelectorAll("#certificateMenu input[type='checkbox']")].filter(cb=>cb.checked).map(cb=>cb.value)}
-function matchesCertificateFilter(firm){const selected=getSelectedCertificates(); if(!selected.length) return true; let certs=Array.isArray(((firm && firm.certificates) ? firm.certificates : undefined))?firm.certificates.map(normalizeCertificateValue):[]; if(!certs.length) certs=["kein zertifikat"]; return selected.some(s=>certs.includes(normalizeCertificateValue(s)))}
+function matchesCertificateFilter(firm){
+  const selected = getSelectedCertificates();
+  if(!selected.length) return true;
+
+  let certs = Array.isArray(firm?.certificates)
+    ? firm.certificates.map(normalizeCertificateValue).filter(Boolean)
+    : [];
+
+  if(!certs.length) certs = ["kein zertifikat"];
+
+  return selected.some(s => certs.includes(normalizeCertificateValue(s)));
+}
 function normAddr(a){return str(a).trim().replace(/\s+/g," ")}
 function applyCacheCoordsOnly(){customers.forEach(c=>{const hit=geoCache[normAddr(c.address)]; if(hit){c.lat=hit.lat;c.lon=hit.lon}}); firms.forEach(f=>{const hit=geoCache[normAddr(f.address)]; if(hit){f.lat=hit.lat;f.lon=hit.lon}})}
 async function geocodeAddress(address){const key=normAddr(address); if(!key) return null; if(geoCache[key]&&isFinite(geoCache[key].lat)&&isFinite(geoCache[key].lon)) return {lat:geoCache[key].lat,lon:geoCache[key].lon}; const url="https://nominatim.openstreetmap.org/search?format=json&limit=1&q="+encodeURIComponent(key); try{const res=await fetch(url,{headers:{"Accept":"application/json"}}); const data=await res.json(); if(data&&data[0]){const lat=parseFloat(data[0].lat),lon=parseFloat(data[0].lon); if(isFinite(lat)&&isFinite(lon)){geoCache[key]={lat,lon,ts:Date.now()}; saveLS(LS_GEO_CACHE_KEY,geoCache); return {lat,lon};}}}catch(e){} return null}
