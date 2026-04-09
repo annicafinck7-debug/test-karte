@@ -711,8 +711,8 @@ const CONFIG = {
   routeConcurrency: 2
 };
 
-const LS_GEO_CACHE_KEY = "salesMap_geoCache_v21";
-const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v19";
+const LS_GEO_CACHE_KEY = "salesMap_geoCache_v22";
+const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v20";
 const LS_PANEL_POS_KEY = "salesMap_panelPos_v18";
 const LS_THEME_KEY = "salesMap_theme_v12";
 const LS_NOTES_KEY = "salesMap_notes_v8";
@@ -838,7 +838,7 @@ async function runWithConcurrency(items, limit, worker){
   await Promise.all(workers);
   return results;
 }
-
+  <script>
 function applyResponsiveLayout(){
   isMobile = window.matchMedia("(max-width: 760px)").matches;
 
@@ -1180,7 +1180,7 @@ function updateCertificateButtonText(isMobileMenu){
   const selected = getSelectedCertificates();
   btn.textContent = !selected.length ? "Alle Zertifikate" : selected.map(certificateLabel).join(", ");
 }
-
+  <script>
 function initWarehouseUI(){
   document.getElementById("lagerCard").addEventListener("click", (e)=>{
     if(e.target.closest("button")) return;
@@ -1387,7 +1387,6 @@ function buildCustomerAddress(r){
   const oldAddress = pickRowField(r, ["adresse","address"], null);
   return oldAddress;
 }
-
 function buildFirmAddress(r){
   const street = pickRowField(r, ["straße","strasse","street","b"], 1);
   const plz    = pickRowField(r, ["plz","postleitzahl","zip","c"], 2);
@@ -1400,19 +1399,23 @@ function buildFirmAddress(r){
   return pickRowField(r, ["adresse","address"], null);
 }
 
-function getFirmPriceFromF(r){
+function getFirmLosePriceFromF(r){
   return toNum(pickRowField(r, ["preis","f"], 5));
+}
+function getFirmSackPriceFromH(r){
+  return toNum(pickRowField(r, ["sackwarenpreis","sackwarepreis","sackwarenp","sackwarep","h"], 7));
 }
 function getFirmSackwareFromJ(r){
   return str(pickRowField(r, ["sackware","j"], 9)).trim();
 }
-function getFirmIndustriewareFromK(r){
-  return str(pickRowField(r, ["industrieware","industrie","k"], 10)).trim();
+function getFirmIndustryPriceFromK(r){
+  return toNum(pickRowField(r, ["industriewarepreis","industriepreis","k"], 10));
 }
+
 function firmHasProduct(firm, product){
   if(product === "lose") return isFinite(firm.base.lose) && firm.base.lose > 0;
-  if(product === "sackware") return firm.sackInfo !== "";
-  if(product === "industrieware") return firm.industryInfo !== "";
+  if(product === "sackware") return firm.sackInfo !== "" && isFinite(firm.base.sackware) && firm.base.sackware > 0;
+  if(product === "industrieware") return isFinite(firm.base.industrieware) && firm.base.industrieware > 0;
   return false;
 }
 
@@ -1449,9 +1452,11 @@ async function loadFirms(){
   rows.forEach((r, idx)=>{
     const name = str(r["firma"] ?? r["name"] ?? pickRowField(r, ["a"], 0)).trim();
     const address = buildFirmAddress(r);
-    const priceF = getFirmPriceFromF(r);
-    const sackInfo = getFirmSackwareFromJ(r);
-    const industryInfo = getFirmIndustriewareFromK(r);
+
+    const losePrice = getFirmLosePriceFromF(r);     // F
+    const sackPrice = getFirmSackPriceFromH(r);     // H
+    const sackInfo  = getFirmSackwareFromJ(r);      // J
+    const industryPrice = getFirmIndustryPriceFromK(r); // K
 
     if(!address){
       addMissing("firmen", name || "Firma", "Keine Adresse", `Zeile: ${idx+2}`);
@@ -1463,13 +1468,13 @@ async function loadFirms(){
       name: name || "Firma",
       address,
       base:{
-        lose: priceF,
-        sackware: priceF,
-        industrieware: priceF
+        lose: losePrice,
+        sackware: sackPrice,
+        industrieware: industryPrice
       },
       stand: getStandFromRow(r),
       sackInfo,
-      industryInfo,
+      industryInfo: isFinite(industryPrice) && industryPrice > 0 ? "ja" : "",
       certificateRaw: str(r["zertifikat"] ?? r["zertifikate"] ?? r["zertifikat(e)"] ?? pickRowField(r, ["i"], 8)).trim(),
       certificates: normalizeCertificates(str(r["zertifikat"] ?? r["zertifikate"] ?? r["zertifikat(e)"] ?? pickRowField(r, ["i"], 8)).trim()),
       lat: NaN, lon: NaN,
@@ -1572,7 +1577,7 @@ function certificateLabel(v){
   if(v === "kein zertifikat") return "Kein Zertifikat";
   return v || "—";
 }
-
+  <script>
 function normAddr(a){ return str(a).trim().replace(/\s+/g,' '); }
 
 function applyCacheCoordsOnly(){
