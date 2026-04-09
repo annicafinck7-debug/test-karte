@@ -460,459 +460,8 @@
     <div class="brand">Verkaufs-Karte</div>
   </div>
 
-  <div class="field w240 desktopOnly">
-    <label>Suche</label>
-    <input id="custSearch" placeholder="Name / Ort …">
-  </div>
-
-  <div class="field w140 desktopOnly">
-    <label>Produkt</label>
-    <select id="product">
-      <option value="lose">Lose</option>
-      <option value="sackware">Sackware</option>
-      <option value="industrieware">Industrieware</option>
-    </select>
-  </div>
-
-  <div class="field w160 desktopOnly">
-    <label>Zertifikat</label>
-    <div class="multiSelect" id="certificateMulti">
-      <button type="button" class="multiSelectBtn" id="certificateBtn">Alle Zertifikate</button>
-      <div class="multiSelectMenu" id="certificateMenu">
-        <label><input type="checkbox" value="enplus"> EnPlus</label>
-        <label><input type="checkbox" value="dinplus"> DINplus</label>
-        <label><input type="checkbox" value="sure"> SURE</label>
-        <label><input type="checkbox" value="cpp"> CPP</label>
-        <label><input type="checkbox" value="kein zertifikat"> Kein Zertifikat</label>
-      </div>
-    </div>
-  </div>
-
-  <div class="field w140 desktopOnly" id="radiusWrapDesktop">
-    <label>Radius (km)</label>
-    <input id="radiusKm" type="number" min="0" value="250">
-  </div>
-
-  <button class="btn desktopOnly" id="btnZoneDraw" title="Zone zeichnen (Polygon)">✏️ Zone</button>
-  <button class="btn desktopOnly" id="btnZoneClear" title="Zone löschen">🧹 Zone</button>
-
-  <div class="field w140 desktopOnly">
-    <label>Menge (t)</label>
-    <input id="qtyT" type="number" min="0.1" step="0.1" value="24">
-  </div>
-
-  <div class="field w140 desktopOnly">
-    <label>Fracht €/km</label>
-    <input id="freightPerKm" type="number" step="0.01" value="1.85">
-  </div>
-
-  <div class="field w140 desktopOnly">
-    <label>Faktor</label>
-    <input id="factor" type="number" step="0.01" value="1.05" min="0" max="10">
-  </div>
-
-  <div class="field w140 desktopOnly">
-    <label>Ziel-VK €/t</label>
-    <input id="targetVk" type="number" step="0.01" placeholder="optional">
-  </div>
-
-  <button class="btn" id="btnTheme" title="Hell/Dunkel umschalten">🌙</button>
-  <button class="btn primary" id="btnCalc">Berechnen</button>
-  <button class="btn desktopOnly" id="btnGeo">Geocoden</button>
-
-  <div class="pill" id="loadStatus" title="Klicken: nicht geladene Einträge anzeigen"><span class="dot"></span> —</div>
-
-  <div class="pill desktopOnly" id="miniKpi" title="Schnellübersicht (nur wenn Ziel-VK gesetzt)">
-    <span class="dot good"></span><span id="miniGood">0</span>
-    <span class="dot mid"></span><span id="miniMid">0</span>
-    <span class="dot bad"></span><span id="miniBad">0</span>
-  </div>
-</div>
-
-<div id="ac" class="ac"></div>
-
-<div id="drawerBackdrop" class="drawerBackdrop"></div>
-<aside id="drawer" class="drawer" aria-hidden="true">
-  <div class="drawerTop">
-    <div class="drawerTitle">Filter & Einstellungen</div>
-    <button class="drawerClose" id="drawerClose" title="Schließen">✕</button>
-  </div>
-
-  <div class="drawerGrid">
-    <div class="field">
-      <label>Suche (Typ)</label>
-      <select id="searchTypeMobile"></select>
-    </div>
-
-    <div class="field">
-      <label>Suche</label>
-      <input id="custSearchMobile" placeholder="Name / Ort …">
-    </div>
-
-    <div class="field">
-      <label>Produkt</label>
-      <select id="productMobile"></select>
-    </div>
-
-    <div class="field">
-      <label>Zertifikat</label>
-      <div class="multiSelect" id="certificateMultiMobile">
-        <button type="button" class="multiSelectBtn" id="certificateBtnMobile">Alle Zertifikate</button>
-        <div class="multiSelectMenu" id="certificateMenuMobile">
-          <label><input type="checkbox" value="enplus"> EnPlus</label>
-          <label><input type="checkbox" value="dinplus"> DINplus</label>
-          <label><input type="checkbox" value="sure"> SURE</label>
-          <label><input type="checkbox" value="cpp"> CPP</label>
-          <label><input type="checkbox" value="kein zertifikat"> Kein Zertifikat</label>
-        </div>
-      </div>
-    </div>
-
-    <div class="field" id="radiusWrapMobile">
-      <label>Radius (km)</label>
-      <input id="radiusKmMobile" type="number" min="0" value="250">
-    </div>
-
-    <div class="drawerActions" id="zoneActionsMobile" style="display:none;">
-      <button class="btn" id="btnZoneDrawMobile">✏️ Zone</button>
-      <button class="btn" id="btnZoneClearMobile">🧹 Zone</button>
-    </div>
-
-    <div class="field">
-      <label>Menge (t)</label>
-      <input id="qtyTMobile" type="number" min="0.1" step="0.1" value="24">
-    </div>
-
-    <div class="field">
-      <label>Fracht €/km</label>
-      <input id="freightPerKmMobile" type="number" step="0.01" value="1.85">
-    </div>
-
-    <div class="field">
-      <label>Faktor</label>
-      <input id="factorMobile" type="number" step="0.01" value="1.05" min="0" max="10">
-    </div>
-
-    <div class="field">
-      <label>Ziel-VK €/t</label>
-      <input id="targetVkMobile" type="number" step="0.01" placeholder="optional">
-    </div>
-
-    <div class="drawerActions">
-      <button class="btn primary" id="btnCalcMobile">Berechnen</button>
-      <button class="btn" id="btnGeoMobile">Geocoden</button>
-    </div>
-  </div>
-</aside>
-
-<div id="missPanel" class="missPanel hidden">
-  <div class="missHead">
-    <div><b>Nicht geladene Einträge</b><span id="missSummary" class="missSummary"></span></div>
-    <button id="missClose" class="missClose" title="Schließen">✕</button>
-  </div>
-  <div class="missTabs">
-    <button class="missTab active" data-tab="firmen">Firmen</button>
-    <button class="missTab" data-tab="kunden">Kunden</button>
-    <button class="missTab" data-tab="auftraege">Aufträge</button>
-    <button id="missExport" class="missExport">CSV export</button>
-  </div>
-  <div id="missBody" class="missBody"></div>
-</div>
-
-<div id="panel" class="panel hidden">
-  <div id="panelHeader" class="panel-h" title="Antippen: ein/ausklappen (mobil)">
-    <div class="t"><span class="grab"></span> Ergebnisse</div>
-    <button id="closePanel" class="x" title="Schließen">✕</button>
-  </div>
-  <div class="panel-b">
-    <div class="kpis">
-      <div class="kpi">
-        <div class="h" id="kpiOriginLabel">Ausgangspunkt</div>
-        <div class="v" id="kpiCustomer">—</div>
-        <div class="small" id="kpiCustomerAddr">—</div>
-      </div>
-      <div class="kpi">
-        <div class="h">Treffer</div>
-        <div class="v" id="kpiCount">—</div>
-        <div class="small" id="kpiQty">Menge: —</div>
-      </div>
-      <div class="kpi">
-        <div class="h">Routing</div>
-        <div class="v" id="kpiRoute">—</div>
-        <div class="small" id="kpiRouteHint">Klick auf Zeile lädt echte Strecke</div>
-      </div>
-      <div class="kpi clickable" id="lagerCard">
-        <div class="h">Lager</div>
-        <div class="v" id="kpiWarehouse">+ Lager</div>
-        <div class="small" id="kpiWarehouseAddr">Kein Lager gewählt</div>
-        <div class="kpiActions">
-          <button class="miniBtn" id="btnWarehousePick" type="button">Suchen</button>
-          <button class="miniBtn" id="btnWarehouseClear" type="button">Löschen</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="detail" id="ordersBox" style="display:none">
-      <div class="title" id="ordersTitle">Aufträge</div>
-      <div id="ordersList" class="small"></div>
-    </div>
-
-    <div class="detail" id="detailBox" style="display:none">
-      <div class="title" id="detailTitle">Details</div>
-      <div class="detail-grid" id="detailGrid"></div>
-    </div>
-
-    <div class="small" style="margin:6px 0 10px 0">
-      <b>Modus Kunden:</b> Kunde auswählen → Firmen-Vorschläge.
-      <br><b>Modus Firmen:</b> Firma auswählen → Kunden-Vorschläge.
-      <br><b>Lager:</b> Optionaler Zwischenpunkt für Firma → Lager → Kunde.
-      <br><b>Route:</b> Nur echte Strecke. Keine Luftlinie.
-    </div>
-
-    <div id="results"></div>
-  </div>
-</div>
-
-<div id="lagerBackdrop" class="lagerBackdrop"></div>
-<div id="lagerModal" class="lagerModal" aria-hidden="true">
-  <div class="lagerHead">
-    <b>Lager auswählen</b>
-    <button id="lagerClose" class="lagerClose" type="button">✕</button>
-  </div>
-  <div class="lagerBody">
-    <input id="lagerSearch" class="lagerSearch" placeholder="Firma oder Kunde suchen …">
-    <div id="lagerList" class="lagerList"></div>
-  </div>
-  <div class="lagerFooter">
-    <button class="btn" id="lagerClearBtn" type="button">Lager löschen</button>
-    <button class="btn" id="lagerCancelBtn" type="button">Schließen</button>
-  </div>
-</div>
-
-<script>
-function saveLS(key, obj){
-  try{ localStorage.setItem(key, JSON.stringify(obj)); }catch(e){}
-}
-function loadLS(key, fallback){
-  try{
-    const s = localStorage.getItem(key);
-    return s ? JSON.parse(s) : fallback;
-  }catch(e){ return fallback; }
-}
-
-const CONFIG = {
-  firmsCsvUrl: "https://docs.google.com/spreadsheets/d/1f1oD1TlYWPRbD12d05yIGkqmXVygVt3ZHLk9U0bKoTs/gviz/tq?tqx=out:csv&gid=0",
-  customersCsvUrl: "https://docs.google.com/spreadsheets/d/1DaiLyZbhJkdSQ1PHbJQmguIrDnGrrhiAVgJC4PJO8vA/gviz/tq?tqx=out:csv&gid=0",
-  deliveriesCsvUrl: "https://docs.google.com/spreadsheets/d/1fcvlM2BUDpoV-HDyPtgDf_1ZqWql6MdEMbisR0eqYYw/gviz/tq?tqx=out:csv&gid=0",
-  geocodeDelayMs: 1100,
-  routeTimeoutMs: 15000,
-  routeRetryCount: 2,
-  routeRetryDelayMs: 500,
-  routeConcurrency: 2
-};
-
-const LS_GEO_CACHE_KEY = "salesMap_geoCache_v20";
-const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v18";
-const LS_PANEL_POS_KEY = "salesMap_panelPos_v18";
-const LS_THEME_KEY = "salesMap_theme_v12";
-const LS_NOTES_KEY = "salesMap_notes_v8";
-const LS_ZONE_GEOJSON_KEY = "salesMap_zone_geojson_v8";
-const LS_ROUTE_CACHE_KEY = "salesMap_routeCache_v3";
-
-const missing = { firmen: [], kunden: [], auftraege: [] };
-let activeMissTab = "firmen";
-
-let map, customers=[], firms=[];
-let customerMarkers=[], firmMarkers=[];
-let selectedCustomer=null;
-let selectedFirm=null;
-let selectedWarehouse=null;
-let routeLayer=null;
-
-let deliveriesLoaded = false;
-let deliveriesAgg = [];
-let deliveriesByCustomer = new Map();
-let deliveriesByFirm = new Map();
-
-let geoCache = loadLS(LS_GEO_CACHE_KEY, {});
-let routeCache = loadLS(LS_ROUTE_CACHE_KEY, {});
-let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
-let notesStore = loadLS(LS_NOTES_KEY, {});
-let isMobile = false;
-
-let zoneGroup = null;
-let zoneLayer = null;
-let drawControl = null;
-
-let lastResults = [];
-let currentFocusedRow = null;
-let markerStateById = new Map();
-let hasCalculatedOnce = false;
-
-window.addEventListener("load", ()=>init().catch(err=>{
-  console.error("INIT ERROR:", err);
-  alert("Fehler beim Laden der Karte. Öffne F12 → Konsole für Details.");
-}));
-
-async function init(){
-  applyThemeFromLS();
-
-  if(!window.L) throw new Error("Leaflet (L) nicht geladen.");
-
-  map = L.map("map", {
-    worldCopyJump:true,
-    zoomControl:true,
-    preferCanvas:true
-  }).setView([51.2, 10.4], 6);
-
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: "&copy; OpenStreetMap contributors"
-  }).addTo(map);
-
-  setTimeout(()=>map.invalidateSize(), 250);
-  window.addEventListener("resize", ()=>{ if(map) map.invalidateSize(); });
-
-  initZoneTools();
-  initPanelDragDesktopOnly();
-  initUI();
-  initMissingUI();
-  initMobileUI();
-  initCertificateFilters();
-  initWarehouseUI();
-  applyResponsiveLayout();
-  window.addEventListener("resize", applyResponsiveLayout);
-
-  map.on("click", ()=>{ closeDrawer(); });
-
-  setLoadStatus("Lade Tabellen …");
-
-  await loadCustomers();
-  await loadFirms();
-  await loadDeliveries();
-
-  applyCacheCoordsOnly();
-  renderMarkers();
-  updateOriginKpi(null);
-  updateWarehouseKpi();
-  updateLoadStatusCounts("✅ geladen");
-  updateMiniKpis({good:0, mid:0, bad:0});
-  updateModeUI();
-}
-
-function routeCacheKey(from, to){
-  return `${from.lat.toFixed(5)},${from.lon.toFixed(5)}__${to.lat.toFixed(5)},${to.lon.toFixed(5)}`;
-}
-function routeCacheKeyVia(a, w, b){
-  return `${a.lat.toFixed(5)},${a.lon.toFixed(5)}__${w.lat.toFixed(5)},${w.lon.toFixed(5)}__${b.lat.toFixed(5)},${b.lon.toFixed(5)}`;
-}
-function getCachedRoute(from, to){
-  return routeCache[routeCacheKey(from, to)] || null;
-}
-function setCachedRoute(from, to, data){
-  routeCache[routeCacheKey(from, to)] = data;
-  saveLS(LS_ROUTE_CACHE_KEY, routeCache);
-}
-function getCachedRouteVia(a, w, b){
-  return routeCache[routeCacheKeyVia(a, w, b)] || null;
-}
-function setCachedRouteVia(a, w, b, data){
-  routeCache[routeCacheKeyVia(a, w, b)] = data;
-  saveLS(LS_ROUTE_CACHE_KEY, routeCache);
-}
-async function runWithConcurrency(items, limit, worker){
-  const results = new Array(items.length);
-  let index = 0;
-
-  async function next(){
-    while(index < items.length){
-      const current = index++;
-      results[current] = await worker(items[current], current);
-    }
-  }
-
-  const workers = [];
-  for(let i=0; i<Math.min(limit, items.length); i++){
-    workers.push(next());
-  }
-  await Promise.all(workers);
-  return results;
-}
-
-function applyResponsiveLayout(){
-  isMobile = window.matchMedia("(max-width: 760px)").matches;
-
-  const panel = document.getElementById("panel");
-  panel.classList.toggle("mobileSheet", isMobile);
-
-  if(isMobile){
-    panel.style.left = "";
-    panel.style.top = "";
-    panel.style.right = "";
-    setTimeout(()=>map && map.invalidateSize(), 60);
-  }else{
-    const pos = loadLS(LS_PANEL_POS_KEY, null);
-    if(pos && isFinite(pos.x) && isFinite(pos.y)){
-      panel.style.left = pos.x+"px";
-      panel.style.top  = pos.y+"px";
-      panel.style.right = "auto";
-    }else{
-      panel.style.left = "";
-      panel.style.top  = "";
-      panel.style.right = "12px";
-    }
-    panel.classList.remove("collapsed");
-    setTimeout(()=>map && map.invalidateSize(), 60);
-  }
-}
-
-function addMissing(tab, name, reason, extra){
-  missing[tab].push({
-    name: (name||"Unbekannt").trim() || "Unbekannt",
-    reason: reason || "Unbekannt",
-    extra: extra || ""
-  });
-}
-function renderMissing(tab){
-  activeMissTab = tab;
-  const body = document.getElementById("missBody");
-  const list = missing[tab] || [];
-  document.getElementById("missSummary").textContent =
-    ` · Firmen ${missing.firmen.length} · Kunden ${missing.kunden.length} · Aufträge ${missing.auftraege.length}`;
-
-  if(!list.length){
-    body.innerHTML = `<div style="opacity:.85">Keine fehlenden Einträge 🎉</div>`;
-    return;
-  }
-
-  body.innerHTML = list.map(x => `
-    <div class="missRow">
-      <b>${esc(x.name)}</b>
-      <div class="r">Grund: ${esc(x.reason)}</div>
-      ${x.extra ? `<div class="m">${esc(x.extra)}</div>` : ``}
-    </div>
-  `).join("");
-}
-function exportMissingCsv(){
-  const tab = activeMissTab;
-  const rows = missing[tab] || [];
-  const header = "Name;Grund;Extra\n";
-  const csv = header + rows.map(r=>{
-    const a = String(r.name||"").replaceAll("\n"," ").replaceAll(";"," ,");
-    const b = String(r.reason||"").replaceAll("\n"," ").replaceAll(";"," ,");
-    const c = String(r.extra||"").replaceAll("\n"," ").replaceAll(";"," ,");
-    return `${a};${b};${c}`;
-  }).join("\n");
-
-  const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `nicht_geladen_${tab}.csv`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-
-function initMissingUI(){
+  <div class="field w240
+  function initMissingUI(){
   document.getElementById("loadStatus")?.addEventListener("click", ()=>{
     document.getElementById("missPanel").classList.toggle("hidden");
     renderMissing(activeMissTab);
@@ -1362,6 +911,7 @@ function pickRowField(r, keys=[], fallbackIndex=null){
   if(Number.isInteger(fallbackIndex)) return str(rowValueByIndex(r, fallbackIndex)).trim();
   return "";
 }
+
 function getCustomerAcceptsFromRow(r){
   return {
     lose: isYes(pickRowField(r, ["lose","lose pellets","losepellets","pellets lose","lose-pellets","c"], 2)),
@@ -1385,6 +935,34 @@ function buildCustomerAddress(r){
 
   const oldAddress = pickRowField(r, ["adresse","address"], null);
   return oldAddress;
+}
+
+function buildFirmAddress(r){
+  const street = pickRowField(r, ["straße","strasse","street","b"], 1);
+  const plz    = pickRowField(r, ["plz","postleitzahl","zip","c"], 2);
+  const ort    = pickRowField(r, ["ort","stadt","city","d"], 3);
+  const land   = pickRowField(r, ["land","country","e"], 4);
+
+  const addr = buildAddressFromParts([street, plz, ort, land]);
+  if(addr) return addr;
+
+  return pickRowField(r, ["adresse","address"], null);
+}
+
+function getFirmPriceFromF(r){
+  return toNum(pickRowField(r, ["preis","f"], 5));
+}
+function getFirmSackwareFromJ(r){
+  return str(pickRowField(r, ["sackware","j"], 9)).trim();
+}
+function getFirmIndustriewareFromK(r){
+  return str(pickRowField(r, ["industrieware","industrie","k"], 10)).trim();
+}
+function firmHasProduct(firm, product){
+  if(product === "lose") return isFinite(firm.base.lose) && firm.base.lose > 0;
+  if(product === "sackware") return firm.sackInfo !== "";
+  if(product === "industrieware") return firm.industryInfo !== "";
+  return false;
 }
 
 async function loadCustomers(){
@@ -1418,10 +996,13 @@ async function loadFirms(){
   const list = [];
 
   rows.forEach((r, idx)=>{
-    const name = str(r["firma"] ?? r["name"]).trim();
-    const ort  = str(r["ort"] ?? r["adresse"] ?? r["address"]).trim();
+    const name = str(r["firma"] ?? r["name"] ?? pickRowField(r, ["a"], 0)).trim();
+    const address = buildFirmAddress(r);
+    const priceF = getFirmPriceFromF(r);
+    const sackInfo = getFirmSackwareFromJ(r);
+    const industryInfo = getFirmIndustriewareFromK(r);
 
-    if(!ort){
+    if(!address){
       addMissing("firmen", name || "Firma", "Keine Adresse", `Zeile: ${idx+2}`);
       return;
     }
@@ -1429,16 +1010,17 @@ async function loadFirms(){
     list.push({
       id:"F"+idx,
       name: name || "Firma",
-      address: ort,
+      address,
       base:{
-        lose: toNum(r["preis"]),
-        sackware: toNum(r["sackwarenp"] ?? r["sackwarep"] ?? r["sackwarepreis"]),
-        industrieware: toNum(r["industriewal"] ?? r["industrieware"] ?? r["industriewar"] ?? r["industriewa"])
+        lose: priceF,
+        sackware: priceF,
+        industrieware: priceF
       },
       stand: getStandFromRow(r),
-      sackInfo: str(r["sackware"]).trim(),
-      certificateRaw: str(r["zertifikat"] ?? r["zertifikate"] ?? r["zertifikat(e)"]).trim(),
-      certificates: normalizeCertificates(str(r["zertifikat"] ?? r["zertifikate"] ?? r["zertifikat(e)"]).trim()),
+      sackInfo,
+      industryInfo,
+      certificateRaw: str(r["zertifikat"] ?? r["zertifikate"] ?? r["zertifikat(e)"] ?? pickRowField(r, ["i"], 8)).trim(),
+      certificates: normalizeCertificates(str(r["zertifikat"] ?? r["zertifikate"] ?? r["zertifikat(e)"] ?? pickRowField(r, ["i"], 8)).trim()),
       lat: NaN, lon: NaN,
       raw: r
     });
@@ -1671,7 +1253,8 @@ function getVisibleCustomers(){
   return customers.filter(c => customerMatchesSelectedProduct(c, product));
 }
 function getVisibleFirms(){
-  return firms.filter(matchesCertificateFilter);
+  const product = document.getElementById("product")?.value || "lose";
+  return firms.filter(f => matchesCertificateFilter(f) && firmHasProduct(f, product));
 }
 
 function clearMarkerState(){
@@ -1747,6 +1330,7 @@ function renderMarkers(){
   firms.forEach(f=>{
     if(!isFinite(f.lat)||!isFinite(f.lon)) return;
     if(!matchesCertificateFilter(f)) return;
+    if(!firmHasProduct(f, inputs.product)) return;
 
     const isSelected = selectedFirm && selectedFirm.id === f.id;
     const isWarehouse = selectedWarehouse && selectedWarehouse.kind === "firma" && selectedWarehouse.ref.id === f.id;
@@ -1868,7 +1452,21 @@ function initUI(){
       document.getElementById("kpiCount").textContent = "—";
     }
 
+    if(getSearchType()==="firmen" && origin && !firmHasProduct(origin, document.getElementById("product").value)){
+      selectedFirm = null;
+      updateOriginKpi(null);
+      showOrdersForOrigin(null);
+      clearRoute();
+      hideDetail();
+      document.getElementById("results").innerHTML = "";
+      document.getElementById("kpiCount").textContent = "—";
+    }
+
     if(selectedWarehouse && selectedWarehouse.kind === "kunde" && !customerMatchesSelectedProduct(selectedWarehouse.ref, document.getElementById("product").value)){
+      selectedWarehouse = null;
+      updateWarehouseKpi();
+    }
+    if(selectedWarehouse && selectedWarehouse.kind === "firma" && !firmHasProduct(selectedWarehouse.ref, document.getElementById("product").value)){
       selectedWarehouse = null;
       updateWarehouseKpi();
     }
@@ -1900,6 +1498,9 @@ function initUI(){
       updateOriginKpi(selectedCustomer);
     }else{
       selectedCustomer = null;
+      if(selectedFirm && !firmHasProduct(selectedFirm, document.getElementById("product").value)){
+        selectedFirm = null;
+      }
       updateOriginKpi(selectedFirm);
     }
 
@@ -2046,6 +1647,7 @@ function selectCustomer(c){
 
 function selectFirm(f){
   if(!matchesCertificateFilter(f)) return;
+  if(!firmHasProduct(f, document.getElementById("product").value)) return;
 
   selectedFirm = f;
   selectedCustomer = null;
@@ -2120,6 +1722,7 @@ async function calculate(){
     for(const f of firms){
       if(!isFinite(f.lat)||!isFinite(f.lon)) continue;
       if(!matchesCertificateFilter(f)) continue;
+      if(!firmHasProduct(f, product)) continue;
       if(warehouse && warehouse.ref && warehouse.ref.id === f.id) continue;
 
       const kmFilter = haversineKm(f.lat, f.lon, origin.lat, origin.lon);
@@ -2133,6 +1736,14 @@ async function calculate(){
     }
   }else{
     const firm = origin;
+    if(!firmHasProduct(firm, product)){
+      out.innerHTML = `<div class="small">⚠️ Für <b>${esc(firm.name)}</b> ist <b>${esc(productLabel(product))}</b> nicht vorhanden.</div>`;
+      document.getElementById("kpiCount").textContent = "0";
+      clearMarkerState();
+      renderMarkers();
+      return;
+    }
+
     const overrideFirm = priceOverrides?.[firm.id]?.[product];
     const baseFirm = isFinite(overrideFirm) ? overrideFirm : firm.base?.[product];
 
