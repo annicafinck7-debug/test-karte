@@ -711,7 +711,7 @@ const CONFIG = {
   routeConcurrency: 2
 };
 
-const LS_GEO_CACHE_KEY = "salesMap_geoCache_v22";
+const LS_GEO_CACHE_KEY = "salesMap_geoCache_v23";
 const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v19";
 const LS_PANEL_POS_KEY = "salesMap_panelPos_v18";
 const LS_THEME_KEY = "salesMap_theme_v12";
@@ -792,49 +792,12 @@ async function init(){
   await loadDeliveries();
 
   applyCacheCoordsOnly();
-  updateLoadStatusCounts("Cache");
-
-  await geocodeMissingOnStartup();
-
   renderMarkers();
   updateOriginKpi(null);
   updateWarehouseKpi();
   updateLoadStatusCounts("✅ geladen");
   updateMiniKpis({good:0, mid:0, bad:0});
   updateModeUI();
-}
-
-async function geocodeMissingOnStartup(){
-  let totalC = customers.length;
-  let totalF = firms.length;
-  let doneC = customers.filter(c=>isFinite(c.lat)&&isFinite(c.lon)).length;
-  let doneF = firms.filter(f=>isFinite(f.lat)&&isFinite(f.lon)).length;
-
-  setLoadStatus(`Geocoding … Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}`);
-
-  for(const c of customers){
-    if(isFinite(c.lat) && isFinite(c.lon)) continue;
-    const coords = await geocodeAddress(c.address);
-    if(coords){
-      c.lat = coords.lat;
-      c.lon = coords.lon;
-      doneC++;
-      setLoadStatus(`Geocoding … Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}`);
-    }
-    await sleep(CONFIG.geocodeDelayMs);
-  }
-
-  for(const f of firms){
-    if(isFinite(f.lat) && isFinite(f.lon)) continue;
-    const coords = await geocodeAddress(f.address);
-    if(coords){
-      f.lat = coords.lat;
-      f.lon = coords.lon;
-      doneF++;
-      setLoadStatus(`Geocoding … Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}`);
-    }
-    await sleep(CONFIG.geocodeDelayMs);
-  }
 }
 
 function routeCacheKey(from, to){
@@ -1399,6 +1362,17 @@ function pickRowField(r, keys=[], fallbackIndex=null){
   if(Number.isInteger(fallbackIndex)) return str(rowValueByIndex(r, fallbackIndex)).trim();
   return "";
 }
+function hasAnyValue(v){
+  return String(v ?? "").trim() !== "";
+}
+function truthyProductValue(v){
+  if(isYes(v)) return true;
+  if(!hasAnyValue(v)) return false;
+  const txt = String(v).trim().toLowerCase();
+  if(["nein","no","0","false","-"].includes(txt)) return false;
+  return true;
+}
+
 function getCustomerAcceptsFromRow(r){
   return {
     lose: isYes(pickRowField(r, ["lose","lose pellets","losepellets","pellets lose","lose-pellets","c"], 2)),
@@ -1441,8 +1415,23 @@ function getFirmBasePricesFromRow(r){
     industrieware: toNum(pickRowField(r, ["industriewarepreis","industriepreis","preis industrieware","industriewar","industrieware"], 10))
   };
 }
+function getFirmProductsFromRow(r, base){
+  const loseRaw = pickRowField(r, ["lose","lose pellets","losepellets","pellets lose","lose-pellets"], 6); // Spalte G
+  const sackRaw = pickRowField(r, ["sackware","sackwaren"], 9); // Spalte J
+  const indRaw  = pickRowField(r, ["industrieware","industrie","industriewaren"], 10); // Spalte K
+
+  return {
+    lose: truthyProductValue(loseRaw) || (isFinite(base?.lose) && base.lose > 0),
+    sackware: truthyProductValue(sackRaw) || (isFinite(base?.sackware) && base.sackware > 0),
+    industrieware: truthyProductValue(indRaw) || (isFinite(base?.industrieware) && base.industrieware > 0)
+  };
+}
 function firmHasProduct(firm, product){
-  if(!firm || !firm.base) return false;
+  if(!firm) return false;
+  if(firm.products && Object.prototype.hasOwnProperty.call(firm.products, product)){
+    return !!firm.products[product];
+  }
+  if(!firm.base) return false;
   const price = firm.base[product];
   return isFinite(price) && price > 0;
 }
@@ -1487,12 +1476,14 @@ async function loadFirms(){
     }
 
     const base = getFirmBasePricesFromRow(r);
+    const products = getFirmProductsFromRow(r, base);
 
     list.push({
       id:"F"+idx,
       name: name || "Firma",
       address: addr,
       base,
+      products,
       stand: getStandFromRow(r),
       sackInfo: str(r["sackware"]).trim(),
       certificateRaw: str(r["zertifikat"] ?? r["zertifikate"] ?? r["zertifikat(e)"]).trim(),
