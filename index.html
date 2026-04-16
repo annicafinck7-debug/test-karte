@@ -711,7 +711,7 @@ const CONFIG = {
   routeConcurrency: 2
 };
 
-const LS_GEO_CACHE_KEY = "salesMap_geoCache_v23";
+const LS_GEO_CACHE_KEY = "salesMap_geoCache_stable";
 const LS_PRICE_OVERRIDES_KEY = "salesMap_priceOverrides_v19";
 const LS_PANEL_POS_KEY = "salesMap_panelPos_v18";
 const LS_THEME_KEY = "salesMap_theme_v12";
@@ -734,7 +734,8 @@ let deliveriesAgg = [];
 let deliveriesByCustomer = new Map();
 let deliveriesByFirm = new Map();
 
-let geoCache = loadLS(LS_GEO_CACHE_KEY, {});
+let geoCache = mergeGeoCaches();
+saveGeoCacheStable();
 let routeCache = loadLS(LS_ROUTE_CACHE_KEY, {});
 let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
 let notesStore = loadLS(LS_NOTES_KEY, {});
@@ -1596,17 +1597,70 @@ function normAddr(a){
     .replace(/\s+/g, " ")
     .replace(/straße/g, "str")
     .replace(/strasse/g, "str")
-    .replace(/,/g, "");
+    .replace(/\bstr\.\b/g, "str")
+    .replace(/,/g, "")
+    .replace(/\s*-\s*/g, "-");
+}
+
+  function mergeGeoCaches(){
+  const merged = {};
+
+  try{
+    for(let i = 0; i < localStorage.length; i++){
+      const key = localStorage.key(i);
+      if(!key) continue;
+
+      if(key === LS_GEO_CACHE_KEY || key.startsWith("salesMap_geoCache_v")){
+        try{
+          const raw = JSON.parse(localStorage.getItem(key) || "{}");
+          if(raw && typeof raw === "object"){
+            for(const addrKey of Object.keys(raw)){
+              const hit = raw[addrKey];
+              if(hit && isFinite(hit.lat) && isFinite(hit.lon)){
+                merged[addrKey] = { lat: hit.lat, lon: hit.lon, ts: hit.ts || Date.now() };
+              }
+            }
+          }
+        }catch(e){}
+      }
+    }
+  }catch(e){}
+
+  return merged;
+}
+
+function saveGeoCacheStable(){
+  saveLS(LS_GEO_CACHE_KEY, geoCache);
+}
+
+  function applyCacheCoordsOnly(){
+  customers.forEach(c=>{
+    const key = normAddr(c.address);
+    const hit = geoCache[key];
+    if(hit && isFinite(hit.lat) && isFinite(hit.lon)){
+      c.lat = hit.lat;
+      c.lon = hit.lon;
+    }
+  });
+
+  firms.forEach(f=>{
+    const key = normAddr(f.address);
+    const hit = geoCache[key];
+    if(hit && isFinite(hit.lat) && isFinite(hit.lon)){
+      f.lat = hit.lat;
+      f.lon = hit.lon;
+    }
+  });
 }
   
-function applyCacheCoordsOnly(){
-  customers.forEach(c=>{
-    const hit = geoCache[normAddr(c.address)];
-    if(hit){ c.lat=hit.lat; c.lon=hit.lon; }
-  });
   firms.forEach(f=>{
-    const hit = geoCache[normAddr(f.address)];
-    if(hit){ f.lat=hit.lat; f.lon=hit.lon; }
+    const key = normAddr(f.address);
+    const hit = geoCache[key];
+
+    if(hit && isFinite(hit.lat) && isFinite(hit.lon)){
+      f.lat = hit.lat;
+      f.lon = hit.lon;
+    }
   });
 }
 
@@ -1614,8 +1668,9 @@ async function geocodeAddress(address){
   const key = normAddr(address);
   if(!key) return null;
 
-  if(geoCache[key] && isFinite(geoCache[key].lat) && isFinite(geoCache[key].lon)){
-    return { lat: geoCache[key].lat, lon: geoCache[key].lon };
+  const cached = geoCache[key];
+  if(cached && isFinite(cached.lat) && isFinite(cached.lon)){
+    return { lat: cached.lat, lon: cached.lon };
   }
 
   const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(address);
@@ -1630,7 +1685,7 @@ async function geocodeAddress(address){
 
       if(isFinite(lat) && isFinite(lon)){
         geoCache[key] = { lat, lon, ts: Date.now() };
-        saveLS(LS_GEO_CACHE_KEY, geoCache);
+        saveGeoCacheStable();
         return { lat, lon };
       }
     }
