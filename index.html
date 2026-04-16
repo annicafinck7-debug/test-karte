@@ -1720,18 +1720,15 @@ function rebuildMissingNoCoords(){
     }
   }
 }
-  function updateLoadStatusCounts(prefix=""){
+ function updateLoadStatusCounts(prefix=""){
   const inputs = getInputs();
 
-  // Gesamt
   const totalC = customers.length;
   const totalF = firms.length;
 
-  // Nur mit Koordinaten
   const geoC = customers.filter(c => isFinite(c.lat) && isFinite(c.lon)).length;
   const geoF = firms.filter(f => isFinite(f.lat) && isFinite(f.lon)).length;
 
-  // Wirklich nutzbar (Filter + Koordinaten)
   const usableC = customers.filter(c =>
     isFinite(c.lat) &&
     isFinite(c.lon) &&
@@ -1746,6 +1743,8 @@ function rebuildMissingNoCoords(){
   ).length;
 
   const delivTxt = deliveriesLoaded ? ` · Aufträge ✓` : ` · Aufträge —`;
+
+  rebuildMissingNoCoords();
 
   setLoadStatus(
     `${prefix}${prefix ? " · " : ""}` +
