@@ -736,6 +736,7 @@ let deliveriesByFirm = new Map();
 
 let geoCache = mergeGeoCaches();
 saveGeoCacheStable();
+ console.log("GeoCache geladen:", Object.keys(geoCache).length); 
 let routeCache = loadLS(LS_ROUTE_CACHE_KEY, {});
 let priceOverrides = loadLS(LS_PRICE_OVERRIDES_KEY, {});
 let notesStore = loadLS(LS_NOTES_KEY, {});
@@ -1602,7 +1603,7 @@ function normAddr(a){
     .replace(/\s*-\s*/g, "-");
 }
 
-  function mergeGeoCaches(){
+function mergeGeoCaches(){
   const merged = {};
 
   try{
@@ -1617,7 +1618,12 @@ function normAddr(a){
             for(const addrKey of Object.keys(raw)){
               const hit = raw[addrKey];
               if(hit && isFinite(hit.lat) && isFinite(hit.lon)){
-                merged[addrKey] = { lat: hit.lat, lon: hit.lon, ts: hit.ts || Date.now() };
+                const normalizedKey = normAddr(addrKey);
+                merged[normalizedKey] = {
+                  lat: hit.lat,
+                  lon: hit.lon,
+                  ts: hit.ts || Date.now()
+                };
               }
             }
           }
@@ -1630,6 +1636,20 @@ function normAddr(a){
 }
 
 function saveGeoCacheStable(){
+  const normalized = {};
+
+  for(const key of Object.keys(geoCache || {})){
+    const hit = geoCache[key];
+    if(hit && isFinite(hit.lat) && isFinite(hit.lon)){
+      normalized[normAddr(key)] = {
+        lat: hit.lat,
+        lon: hit.lon,
+        ts: hit.ts || Date.now()
+      };
+    }
+  }
+
+  geoCache = normalized;
   saveLS(LS_GEO_CACHE_KEY, geoCache);
 }
 
