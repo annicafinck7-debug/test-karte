@@ -1720,7 +1720,40 @@ function rebuildMissingNoCoords(){
     }
   }
 }
-function updateLoadStatusCounts(prefix=""){
+  function updateLoadStatusCounts(prefix=""){
+  const inputs = getInputs();
+
+  // Gesamt
+  const totalC = customers.length;
+  const totalF = firms.length;
+
+  // Nur mit Koordinaten
+  const geoC = customers.filter(c => isFinite(c.lat) && isFinite(c.lon)).length;
+  const geoF = firms.filter(f => isFinite(f.lat) && isFinite(f.lon)).length;
+
+  // Wirklich nutzbar (Filter + Koordinaten)
+  const usableC = customers.filter(c =>
+    isFinite(c.lat) &&
+    isFinite(c.lon) &&
+    customerMatchesSelectedProduct(c, inputs.product)
+  ).length;
+
+  const usableF = firms.filter(f =>
+    isFinite(f.lat) &&
+    isFinite(f.lon) &&
+    matchesCertificateFilter(f) &&
+    firmHasProduct(f, inputs.product)
+  ).length;
+
+  const delivTxt = deliveriesLoaded ? ` · Aufträge ✓` : ` · Aufträge —`;
+
+  setLoadStatus(
+    `${prefix}${prefix ? " · " : ""}` +
+    `Kunden ${usableC}/${geoC}/${totalC} · ` +
+    `Firmen ${usableF}/${geoF}/${totalF}` +
+    `${delivTxt}`
+  );
+}
   const totalC = customers.length;
   const totalF = firms.length;
   const doneC = customers.filter(c=>isFinite(c.lat)&&isFinite(c.lon)).length;
