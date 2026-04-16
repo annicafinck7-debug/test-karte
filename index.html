@@ -1720,7 +1720,8 @@ function rebuildMissingNoCoords(){
     }
   }
 }
- function updateLoadStatusCounts(prefix=""){
+
+function updateLoadStatusCounts(prefix=""){
   const inputs = getInputs();
 
   const totalC = customers.length;
@@ -1752,15 +1753,6 @@ function rebuildMissingNoCoords(){
     `Firmen ${usableF}/${geoF}/${totalF}` +
     `${delivTxt}`
   );
-}
-  const totalC = customers.length;
-  const totalF = firms.length;
-  const doneC = customers.filter(c=>isFinite(c.lat)&&isFinite(c.lon)).length;
-  const doneF = firms.filter(f=>isFinite(f.lat)&&isFinite(f.lon)).length;
-  const delivTxt = deliveriesLoaded ? ` · Aufträge ✓` : ` · Aufträge —`;
-
-  rebuildMissingNoCoords();
-  setLoadStatus(`${prefix}${prefix? " · ":""}Kunden ${doneC}/${totalC} · Firmen ${doneF}/${totalF}${delivTxt}`);
 }
 
 async function geocodeAll(){
@@ -1798,7 +1790,6 @@ async function geocodeAll(){
   updateWarehouseKpi();
   updateLoadStatusCounts("✅ Fertig");
 }
-
 function customerTriangleIcon(selected=false, fillColor=null){
   const color = fillColor || (selected ? getCss("--highlight") : getCss("--cust-tri"));
   const size = selected ? 28 : 18;
