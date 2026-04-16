@@ -1633,7 +1633,7 @@ function saveGeoCacheStable(){
   saveLS(LS_GEO_CACHE_KEY, geoCache);
 }
 
-  function applyCacheCoordsOnly(){
+function applyCacheCoordsOnly(){
   customers.forEach(c=>{
     const key = normAddr(c.address);
     const hit = geoCache[key];
@@ -1646,17 +1646,6 @@ function saveGeoCacheStable(){
   firms.forEach(f=>{
     const key = normAddr(f.address);
     const hit = geoCache[key];
-    if(hit && isFinite(hit.lat) && isFinite(hit.lon)){
-      f.lat = hit.lat;
-      f.lon = hit.lon;
-    }
-  });
-}
-  
-  firms.forEach(f=>{
-    const key = normAddr(f.address);
-    const hit = geoCache[key];
-
     if(hit && isFinite(hit.lat) && isFinite(hit.lon)){
       f.lat = hit.lat;
       f.lon = hit.lon;
