@@ -1589,8 +1589,16 @@ function certificateLabel(v){
   return v || "—";
 }
 
-function normAddr(a){ return str(a).trim().replace(/\s+/g,' '); }
-
+function normAddr(a){
+  return String(a || "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/straße/g, "str")
+    .replace(/strasse/g, "str")
+    .replace(/,/g, "");
+}
+  
 function applyCacheCoordsOnly(){
   customers.forEach(c=>{
     const hit = geoCache[normAddr(c.address)];
@@ -1607,23 +1615,29 @@ async function geocodeAddress(address){
   if(!key) return null;
 
   if(geoCache[key] && isFinite(geoCache[key].lat) && isFinite(geoCache[key].lon)){
-    return {lat: geoCache[key].lat, lon: geoCache[key].lon};
+    return { lat: geoCache[key].lat, lon: geoCache[key].lon };
   }
 
-  const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(key);
+  const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(address);
+
   try{
     const res = await fetch(url, { headers: { "Accept":"application/json" } });
     const data = await res.json();
+
     if(data && data[0]){
       const lat = parseFloat(data[0].lat);
       const lon = parseFloat(data[0].lon);
+
       if(isFinite(lat) && isFinite(lon)){
-        geoCache[key] = {lat, lon, ts: Date.now()};
+        geoCache[key] = { lat, lon, ts: Date.now() };
         saveLS(LS_GEO_CACHE_KEY, geoCache);
-        return {lat, lon};
+        return { lat, lon };
       }
     }
-  }catch(e){}
+  }catch(e){
+    console.warn("Geocode Fehler:", address, e);
+  }
+
   return null;
 }
 
