@@ -490,7 +490,7 @@ async function geocodeItem(item){
   if(applyCoordsFromCache(item))return {lat:item.lat,lon:item.lon};
   const q=item.address;if(!q)return null;
   try{
-    const url="https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=de&q="+encodeURIComponent(q);
+  const url="https://nominatim.openstreetmap.org/search?format=json&limit=1&q="+encodeURIComponent(q);  
     const res=await fetch(url,{headers:{"Accept":"application/json"}});
     const data=await res.json();
     if(data&&data[0]){
