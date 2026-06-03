@@ -732,8 +732,19 @@ async function calculate(){
     const freightPerT=(route.km*inp.freightPerKm)/inp.qtyT,deliveredPerT=(item.base+freightPerT)*inp.factor,deliveredTotal=deliveredPerT*inp.qtyT,marginPerT=isFinite(inp.targetVk)?inp.targetVk-deliveredPerT:NaN;
     return {entity:item.entity,base:item.base,routeKm:route.km,calcKm:route.km,durationMin:route.minutes,routeData:route,freightPerT,deliveredPerT,deliveredTotal,marginPerT,routeModeText:w?"echte Strecke über Lager":"echte Strecke"};
   });
-  const results=routed.filter(Boolean).sort((a,b)=>a.deliveredPerT-b.deliveredPerT);lastResults=results;
-  document.getElementById("kpiCount").textContent=String(results.length);updateMiniKpis(countMargins(results,inp.targetVk));
+  const results=routed.filter(Boolean).sort((a,b)=>a.deliveredPerT-b.deliveredPerT);
+lastResults=results;
+
+const avgPrice = results.length
+  ? results.reduce((sum,r)=>sum + (isFinite(r.deliveredPerT) ? r.deliveredPerT : 0),0) / results.length
+  : NaN;
+
+document.getElementById("kpiCount").textContent=String(results.length);
+
+document.getElementById("kpiQty").innerHTML =
+  `Menge: ${fmt(inp.qtyT,1)} t<br>Ø Preis: ${fmt(avgPrice)} €/t`;
+
+updateMiniKpis(countMargins(results,inp.targetVk));
   hasCalculatedOnce=true;rebuildMarkerState(results,inp.targetVk);renderMarkers();
   if(!results.length){out.innerHTML="<div class='small'>Keine Treffer mit echter Route gefunden.</div>";return}
 
