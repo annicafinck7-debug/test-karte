@@ -394,8 +394,8 @@ async function loadCustomers(){
     const name=str(r["name"]??r["kundenname"]??r["kunde"]??r["firma"]??r["unternehmen"]).trim();
     const addr=buildCustomerAddress(r);
     if(!addr){addMissing("kunden",name||"Kunde","Keine Adresse",`Zeile: ${idx+2}`);return}
-    list.push({id:"C"+idx,name:name||addr||"Kunde",address:addr,geoKey:"C_"+normText(name||addr),lat: toNum(pickRowField(r, ["lat","latitude","breitengrad"], 18)),
-lon: toNum(pickRowField(r, ["lon","lng","longitude","längengrad"], 19)),,accepts:getCustomerAcceptsFromRow(r),raw:r});
+    list.push({id:"C"+idx,name:name||addr||"Kunde",address:addr,geoKey:"C_"+normText(name||addr),lat: toNum(pickRowField(r, ["lat","latitude","breitengrad"], 18));
+lon: toNum(pickRowField(r, ["lon","lng","longitude","längengrad"], 19));,accepts:getCustomerAcceptsFromRow(r),raw:r});
   });
   customers=list;
 }
