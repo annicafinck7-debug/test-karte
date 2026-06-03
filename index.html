@@ -742,7 +742,10 @@ const avgPrice = results.length
 document.getElementById("kpiCount").textContent=String(results.length);
 
 document.getElementById("kpiQty").innerHTML =
-  `Menge: ${fmt(inp.qtyT,1)} t<br>Ø Preis: ${fmt(avgPrice)} €/t`;
+  `Menge: ${fmt(inp.qtyT,1)} t<br>
+   <span style="font-size:15px;font-weight:900;color:#2563eb">
+     Ø Preis: ${fmt(avgPrice)} €/t
+   </span>`;
 
 updateMiniKpis(countMargins(results,inp.targetVk));
   hasCalculatedOnce=true;rebuildMarkerState(results,inp.targetVk);renderMarkers();
