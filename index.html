@@ -1314,31 +1314,47 @@ function updateWarehouseKpi(){
 
 function parseCsv(url){
   return new Promise((resolve, reject)=>{
-    Papa.parse(url, {
-      download:true,
-      header:true,
-      skipEmptyLines:true,
-      delimiter:"",
-      transformHeader: (h) => String(h||"").trim().toLowerCase(),
-      complete: (res)=>{
-        const first = res?.data?.[0];
-        const keys = first ? Object.keys(first) : [];
-        if(first && keys.length <= 1){
-          Papa.parse(url, {
-            download:true,
-            header:true,
-            skipEmptyLines:true,
-            delimiter:";",
-            transformHeader: (h) => String(h||"").trim().toLowerCase(),
-            complete: (res2)=>resolve(res2.data),
-            error: reject
+    const callbackName = "gvizCallback_" + Math.random().toString(36).slice(2);
+
+    window[callbackName] = function(data){
+      try{
+        const cols = data.table.cols.map(c =>
+          String(c.label || c.id || "").trim().toLowerCase()
+        );
+
+        const rows = data.table.rows.map(row=>{
+          const obj = {};
+          row.c.forEach((cell, i)=>{
+            obj[cols[i] || ("spalte_" + i)] = cell && cell.v != null ? cell.v : "";
           });
-          return;
-        }
-        resolve(res.data);
-      },
-      error: reject
-    });
+          return obj;
+        });
+
+        cleanup();
+        resolve(rows);
+      }catch(err){
+        cleanup();
+        reject(err);
+      }
+    };
+
+    function cleanup(){
+      delete window[callbackName];
+      if(script && script.parentNode) script.parentNode.removeChild(script);
+    }
+
+    const jsonpUrl = url
+      .replace("tqx=out:csv", "tqx=responseHandler:" + callbackName)
+      .replace("&format=csv", "");
+
+    const script = document.createElement("script");
+    script.src = jsonpUrl;
+    script.onerror = ()=>{
+      cleanup();
+      reject(new Error("Google Sheet konnte nicht geladen werden"));
+    };
+
+    document.body.appendChild(script);
   });
 }
 
