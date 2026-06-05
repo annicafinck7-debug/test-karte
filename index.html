@@ -454,7 +454,8 @@ async function loadFirms(){
     const name=str(r["firma"]??r["name"]).trim(),addr=buildFirmAddress(r);
     if(!addr){addMissing("firmen",name||"Firma","Keine Adresse",`Zeile: ${idx+2}`);return}
     const base=getFirmBasePricesFromRow(r),products=getFirmProductsFromRow(r,base),certRaw=str(r["zertifikat"]??r["zertifikate"]??r["zertifikat(e)"]).trim();
-    list.push({id:"F"+idx,name:name||"Firma",address:addr,geoKey:"F_"+normText(name||addr),base,products,stand:getStandFromRow(r),certificateRaw:certRaw,certificates:normalizeCertificates(certRaw),lat:NaN,lon:NaN,raw:r});
+    list.push({id:"F"+idx,name:name||"Firma",address:addr,geoKey:"F_"+normText(name||addr),base,products,stand:getStandFromRow(r),certificateRaw:certRaw,certificates:normalizeCertificates(certRaw),lat:toNum(pickRowField(r,["lat","latitude","breitengrad"],18)),
+lon:toNum(pickRowField(r,["lon","lng","longitude","längengrad"],19)),raw:r});
   });
   firms=list;
 }
