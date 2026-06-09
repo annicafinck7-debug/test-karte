@@ -438,7 +438,7 @@ async function loadCustomers(){
       id:"C"+idx,
       name:name || addr || "Kunde",
       address:addr,
-      geoKey:"C_"+normText(name+"_"+addr)
+      geoKey:"C_"+normText(name+"_"+addr),
       lat:isFinite(latKunde) ? latKunde : NaN,
       lon:isFinite(lonKunde) ? lonKunde : NaN,
       accepts:getCustomerAcceptsFromRow(r),
