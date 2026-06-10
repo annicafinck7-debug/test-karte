@@ -609,7 +609,18 @@ function initUI(){
   document.getElementById("btnZoneDraw").onclick=startDrawZone;document.getElementById("btnZoneClear").onclick=clearZone;
   document.getElementById("closePanel").onclick=()=>document.getElementById("panel").classList.add("hidden");
   document.getElementById("product").onchange=()=>{clearMarkerState();renderMarkers();if(getOrigin())calculate()};
-  document.getElementById("searchType").onchange=()=>{selectedCustomer=null;selectedFirm=null;lastResults=[];clearRoute();hideDetail();document.getElementById("results").innerHTML="";clearMarkerState();renderMarkers();updateOriginKpi(null);updateModeUI()};
+  document.getElementById("searchType").addEventListener("change", ()=>{
+  selectedCustomer=null;
+  selectedFirm=null;
+  lastResults=[];
+  clearRoute();
+  hideDetail();
+  document.getElementById("results").innerHTML="";
+  clearMarkerState();
+  updateOriginKpi(null);
+  updateModeUI();
+  renderMarkers();
+});
   initSearch();
 }
 function initSearch(){
