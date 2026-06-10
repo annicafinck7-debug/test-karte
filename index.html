@@ -717,15 +717,15 @@ function updateOriginKpi(o){
   if(!o){document.getElementById("kpiCount").textContent="—";document.getElementById("kpiQty").textContent="Menge: —";document.getElementById("ordersBox").style.display="none"}
 }
 function updateModeUI(){
-  const firmMode = getSearchType() === "firmen";
+  const firmMode=getSearchType()==="firmen";
 
-  document.getElementById("radiusWrapDesktop").style.display = firmMode ? "none" : "";
-  document.getElementById("radiusWrapMobile").style.display = firmMode ? "none" : "";
+  document.getElementById("radiusWrapDesktop").style.display=firmMode?"none":"";
+  document.getElementById("radiusWrapMobile").style.display=firmMode?"none":"";
 
-  document.getElementById("btnZoneDraw").style.display = firmMode ? "inline-flex" : "none";
-  document.getElementById("btnZoneClear").style.display = firmMode ? "inline-flex" : "none";
+  document.getElementById("btnZoneDraw").style.display=firmMode?"inline-flex":"none";
+  document.getElementById("btnZoneClear").style.display=firmMode?"inline-flex":"none";
 
-  document.getElementById("zoneActionsMobile").style.display = firmMode ? "grid" : "none";
+  document.getElementById("zoneActionsMobile").style.display=firmMode?"grid":"none";
 }
 function showOrdersForOrigin(o){
   const box=document.getElementById("ordersBox"),listEl=document.getElementById("ordersList");
