@@ -630,7 +630,23 @@ function initSearch(){
   function show(qRaw){
     const q=(qRaw||"").trim().toLowerCase();ac.innerHTML="";if(!q){ac.style.display="none";return}
     const out=list().filter(x=>(x.name||"").toLowerCase().includes(q)||(x.address||"").toLowerCase().includes(q)).slice(0,15);
-    if(!out.length){ac.style.display="none";return}
+    if(!out.length){
+  const d=document.createElement("div");
+  d.className="item";
+  d.innerHTML=`
+    <div class="name">📍 "${esc(qRaw)}" als ${getSearchType()==="kunden" ? "neuen Schnell-Kunden" : "neue Schnell-Firma"} nutzen</div>
+    <div class="addr">Ort / PLZ / Adresse suchen und direkt berechnen</div>
+  `;
+
+  d.onclick=async()=>{
+    ac.style.display="none";
+    await createQuickSearchPoint(qRaw);
+  };
+
+  ac.appendChild(d);
+  ac.style.display="block";
+  return;
+}
     out.forEach(x=>{const d=document.createElement("div");d.className="item";d.innerHTML=`<div class="name">${esc(x.name)}</div><div class="addr">${esc(x.address)}</div><div class="tag">${getSearchType()==="kunden"?"Kunde":"Firma"}</div>`;d.onclick=()=>{getSearchType()==="kunden"?selectCustomer(x):selectFirm(x);ac.style.display="none"};ac.appendChild(d)});
     ac.style.display="block";
   }
@@ -901,6 +917,60 @@ function initPanelDrag(){
 function applyThemeFromLS(){if(loadLS(LS_THEME_KEY,"light")==="dark")document.body.classList.add("dark")}
 async function runWithConcurrency(items,limit,worker){const out=new Array(items.length);let i=0;async function next(){while(i<items.length){const n=i++;out[n]=await worker(items[n],n)}}await Promise.all(Array.from({length:Math.min(limit,items.length)},next));return out}
 function haversineKm(a,b,c,d){const R=6371,rad=x=>x*Math.PI/180,dLat=rad(c-a),dLon=rad(d-b);const x=Math.sin(dLat/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
+  async function createQuickSearchPoint(qRaw){
+  const mode=getSearchType();
+  const q=String(qRaw||"").trim();
+  if(!q)return;
+
+  const temp={
+    id:(mode==="kunden"?"TEMP_C_":"TEMP_F_")+Date.now(),
+    name:q,
+    address:q,
+    geoKey:"TEMP_"+normText(q),
+    lat:NaN,
+    lon:NaN,
+    accepts:{lose:true,sackware:true,industrieware:true},
+    products:{lose:true,sackware:true,industrieware:true},
+    base:{lose:0,sackware:0,industrieware:0},
+    certificates:["kein zertifikat"],
+    certificateRaw:"Kein Zertifikat",
+    temporary:true,
+    raw:{}
+  };
+
+  setLoadStatus("Suche Ort …");
+
+  const hit=await geocodeItem(temp);
+
+  if(!hit){
+    alert("Ort / PLZ wurde nicht gefunden.");
+    updateLoadStatusCounts("✅ geladen");
+    return;
+  }
+
+  if(mode==="kunden"){
+    customers.push(temp);
+    selectCustomer(temp);
+  }else{
+    const p=getInputs().product;
+    const price=toNum(prompt("Basispreis €/t für diese Schnell-Firma eingeben:"));
+
+    if(!isFinite(price)||price<=0){
+      alert("Ohne Basispreis kann die Schnell-Firma nicht berechnet werden.");
+      updateLoadStatusCounts("✅ geladen");
+      return;
+    }
+
+    temp.base[p]=price;
+    temp.products[p]=true;
+    firms.push(temp);
+    selectFirm(temp);
+  }
+
+  renderMarkers();
+  updateLoadStatusCounts("✅ Schnell-Ort");
+  calculate();
+}
 </script>
 </body>
 </html>  
