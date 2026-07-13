@@ -693,150 +693,122 @@ function initSearch(){
   const input = document.getElementById("custSearch");
   const ac = document.getElementById("ac");
 
-  function positionAutocomplete(){
-    const rect = input.getBoundingClientRect();
+  function pos(){
+    const r = input.getBoundingClientRect();
 
-    ac.style.left = rect.left + "px";
-    ac.style.top = (rect.bottom + 8) + "px";
-    ac.style.minWidth = Math.max(280, rect.width) + "px";
+    ac.style.left = r.left + "px";
+    ac.style.top = (r.bottom + 8) + "px";
+    ac.style.minWidth = Math.max(280,r.width) + "px";
   }
 
-  function getSearchList(){
+  function getList(){
     return getSearchType() === "kunden"
       ? customers
       : firms;
   }
 
-  function closeAutocomplete(){
+  function closeSearch(){
     ac.style.display = "none";
-    ac.innerHTML = "";
   }
 
-  function selectSearchResult(item){
-    closeAutocomplete();
-
-    input.value = item.name || "";
-
-    if(getSearchType() === "kunden"){
-      selectCustomer(item);
-    }else{
-      selectFirm(item);
-    }
-  }
-
-  function showResults(){
-    const query = String(input.value || "")
+  function show(qRaw){
+    const q = String(qRaw || "")
       .trim()
       .toLowerCase();
 
-    positionAutocomplete();
+    pos();
     ac.innerHTML = "";
 
-    if(!query){
-      closeAutocomplete();
+    if(!q){
+      closeSearch();
       return;
     }
 
-    const searchList = getSearchList();
-
-    const matches = searchList
+    const matches = getList()
       .filter(item=>{
         const name = String(item.name || "").toLowerCase();
         const address = String(item.address || "").toLowerCase();
 
-        return name.includes(query) || address.includes(query);
+        return name.includes(q) || address.includes(q);
       })
       .slice(0,15);
 
     if(!matches.length){
-      const quickItem = document.createElement("div");
-      quickItem.className = "item";
+      const d = document.createElement("div");
+      d.className = "item";
 
-      quickItem.innerHTML = `
-        <div class="name">
-          📍 „${esc(input.value)}“ als
-          ${getSearchType() === "kunden"
-            ? "neuen Schnell-Kunden"
-            : "neue Schnell-Firma"} nutzen
-        </div>
+      d.innerHTML =
+        '<div class="name">📍 "' +
+        esc(qRaw) +
+        '" als ' +
+        (getSearchType() === "kunden"
+          ? "neuen Schnell-Kunden"
+          : "neue Schnell-Firma") +
+        ' nutzen</div>' +
+        '<div class="addr">Ort / PLZ / Adresse suchen und direkt berechnen</div>';
 
-        <div class="addr">
-          Ort, Postleitzahl oder Adresse suchen
-        </div>
-      `;
-
-      quickItem.addEventListener("mousedown",event=>{
+      d.onmousedown = async event=>{
         event.preventDefault();
         event.stopPropagation();
 
-        const value = input.value;
-        closeAutocomplete();
-        createQuickSearchPoint(value);
-      });
+        closeSearch();
+        await createQuickSearchPoint(qRaw);
+      };
 
-      ac.appendChild(quickItem);
+      ac.appendChild(d);
       ac.style.display = "block";
       return;
     }
 
     matches.forEach(item=>{
-      const resultItem = document.createElement("div");
-      resultItem.className = "item";
+      const d = document.createElement("div");
+      d.className = "item";
 
-      resultItem.innerHTML = `
-        <div class="name">${esc(item.name)}</div>
-        <div class="addr">${esc(item.address)}</div>
-        <div class="tag">
-          ${getSearchType() === "kunden" ? "Kunde" : "Firma"}
-        </div>
-      `;
+      d.innerHTML =
+        '<div class="name">' +
+        esc(item.name) +
+        '</div>' +
+        '<div class="addr">' +
+        esc(item.address) +
+        '</div>' +
+        '<div class="tag">' +
+        (getSearchType() === "kunden" ? "Kunde" : "Firma") +
+        '</div>';
 
-      resultItem.addEventListener("mousedown",event=>{
+      d.onmousedown = event=>{
         event.preventDefault();
         event.stopPropagation();
 
-        selectSearchResult(item);
-      });
+        input.value = item.name || "";
+        closeSearch();
 
-      ac.appendChild(resultItem);
+        if(getSearchType() === "kunden"){
+          selectCustomer(item);
+        }else{
+          selectFirm(item);
+        }
+      };
+
+      ac.appendChild(d);
     });
 
     ac.style.display = "block";
   }
 
-  input.addEventListener("focus",showResults);
-  input.addEventListener("input",showResults);
+  input.onfocus = ()=>{
+    show(input.value);
+  };
 
-  input.addEventListener("keydown",event=>{
-    if(event.key !== "Enter"){
-      return;
-    }
-
-    const firstResult = ac.querySelector(".item");
-
-    if(firstResult){
-      event.preventDefault();
-      firstResult.dispatchEvent(
-        new MouseEvent("mousedown",{
-          bubbles:true,
-          cancelable:true
-        })
-      );
-    }
-  });
-
-  document.getElementById("searchType")
-    .addEventListener("change",()=>{
-      input.value = "";
-      closeAutocomplete();
-    });
+  input.oninput = ()=>{
+    show(input.value);
+  };
 
   document.addEventListener("mousedown",event=>{
     if(
       event.target !== input &&
       !ac.contains(event.target)
     ){
-      closeAutocomplete();
+      closeSearch();
     }
   });
 }
