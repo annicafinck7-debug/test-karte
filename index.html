@@ -460,10 +460,6 @@ async function loadCustomers(){
       )
     );
 
-    /*
-      E-Mail-Adresse aus Spalte Q.
-      Spalte Q ist Position 17, im Code aber Index 16.
-    */
     const email = pickRowField(
       r,
       [
@@ -910,49 +906,70 @@ updateMiniKpis(countMargins(results,inp.targetVk));
   const table=document.createElement("table");
   table.innerHTML=`<thead><tr><th>${mode==="kunden"?"Firma":"Kunde"}</th><th>KM</th><th>Preis</th><th>${isFinite(inp.targetVk)?"Marge":"Info"}</th></tr></thead><tbody></tbody>`;
   const tb=table.querySelector("tbody");
- results.forEach(row=>{
+results.forEach(row=>{
   const tr = document.createElement("tr");
 
-  /*
-    Nur im Modus Firmen sind die Ergebnisse Kunden.
-    Deshalb wird nur dort die Kunden-E-Mail angezeigt.
-  */
-  const emailHtml =
-    mode === "firmen"
-      ? createCustomerEmailLink(row.entity)
-      : "";
+  let emailHtml = "";
+
+  if(mode === "firmen" && validEmail(row.entity.email)){
+    const subject =
+      "Angebot Holzpellets ENplus A1";
+
+    const body =
+      "Hallo,\r\n\r\n" +
+      "ich kann Ihnen freibleibend die " +
+      fmt(inp.qtyT,0) +
+      "to Holzpellets wie folgt anbieten,\r\n\r\n" +
+      "Material: Holzpellets ENplus A1 6mm lose\r\n" +
+      "Lieferzeit: Juli '26\r\n" +
+      "Menge: ca. " +
+      fmt(inp.qtyT,0) +
+      " Tonnen (+/- 2%)\r\n" +
+      "Preis: " +
+      fmt(row.deliveredPerT,2) +
+      " €/t zzgl. gesetzl. MwSt.\r\n" +
+      "Lieferkondition:\r\n\r\n" +
+      "Für weitere Fragen oder Anregungen stehe ich Ihnen gerne zur Verfügung.";
+
+    const mailLink =
+      "mailto:" +
+      encodeURIComponent(String(row.entity.email).trim()) +
+      "?subject=" +
+      encodeURIComponent(subject) +
+      "&body=" +
+      encodeURIComponent(body);
+
+    emailHtml =
+      '<a href="' + esc(mailLink) + '"' +
+      ' onclick="event.stopPropagation()"' +
+      ' style="display:block;margin-top:5px;color:#2563eb;font-weight:800;text-decoration:none;word-break:break-all;">' +
+      '✉ ' + esc(row.entity.email) +
+      '</a>';
+  }
 
   tr.innerHTML = `
     <td>
       <b>${esc(row.entity.name)}</b>
       <br>
-
       <span class="small">
         ${esc(row.entity.address)}
         · Basis ${fmt(row.base)} €/t
         · Fracht ${fmt(row.freightPerT)} €/t
       </span>
-
       ${emailHtml}
     </td>
 
-    <td>
-      ${fmt(row.calcKm,0)}
-    </td>
+    <td>${fmt(row.calcKm,0)}</td>
 
     <td>
       <b>${fmt(row.deliveredPerT)} €/t</b>
       <br>
-
       <span class="small">
-        ${fmt(row.deliveredTotal)} €
-        für ${fmt(inp.qtyT,1)} t
+        ${fmt(row.deliveredTotal)} € für ${fmt(inp.qtyT,1)} t
       </span>
     </td>
 
-    <td>
-      ${makeBadge(row,inp.targetVk)}
-    </td>
+    <td>${makeBadge(row,inp.targetVk)}</td>
   `;
 
   tr.onclick = () =>
