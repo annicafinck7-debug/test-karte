@@ -971,6 +971,389 @@ function haversineKm(a,b,c,d){const R=6371,rad=x=>x*Math.PI/180,dLat=rad(c-a),dL
   updateLoadStatusCounts("✅ Schnell-Ort");
   calculate();
 }
+  /* ==========================================================
+   E-MAIL-ERWEITERUNG FÜR FIRMEN
+   E-Mail-Adresse aus Spalte Q der Firmen-Tabelle
+   Diesen gesamten Block direkt VOR </script> einfügen.
+========================================================== */
+
+/* Gestaltung des anklickbaren E-Mail-Links */
+const emailStyle = document.createElement("style");
+
+emailStyle.textContent = `
+  .firmEmailLink{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    margin-top:4px;
+    color:#2563eb;
+    font-size:12px;
+    font-weight:800;
+    text-decoration:none;
+    cursor:pointer;
+    word-break:break-all;
+  }
+
+  .firmEmailLink:hover{
+    text-decoration:underline;
+  }
+
+  body.dark .firmEmailLink{
+    color:#60a5fa;
+  }
+`;
+
+document.head.appendChild(emailStyle);
+
+
+/* Prüft, ob die eingelesene Adresse ungefähr eine E-Mail-Adresse ist */
+function isValidEmailAddress(email){
+  const value = String(email || "").trim();
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+
+/* Liest die E-Mail-Adresse aus einer Firmenzeile.
+   Spalte Q besitzt den Index 16, weil die Zählung bei 0 beginnt. */
+function getFirmEmailFromRow(row){
+  const email = pickRowField(
+    row,
+    [
+      "email",
+      "e-mail",
+      "e-mail-adresse",
+      "emailadresse",
+      "mail",
+      "mailadresse",
+      "ansprechpartner email",
+      "ansprechpartner e-mail"
+    ],
+    16
+  );
+
+  return String(email || "").trim();
+}
+
+
+/* Erstellt den fertigen Betreff für Outlook */
+function createFirmEmailSubject(firm){
+  const inputs = getInputs();
+  const product = productLabel(inputs.product);
+
+  return `Anfrage ${product} – ${firm?.name || "Firma"}`;
+}
+
+
+/* Erstellt den vorbereiteten Nachrichtentext */
+function createFirmEmailBody(firm){
+  const inputs = getInputs();
+  const product = productLabel(inputs.product);
+  const quantity = fmt(inputs.qtyT, 1);
+
+  return [
+    "Guten Tag,",
+    "",
+    `wir interessieren uns für ein Angebot im Bereich ${product}.`,
+    "",
+    `Gewünschte Menge: ${quantity} t`,
+    "",
+    "Bitte senden Sie uns hierzu Ihren aktuellen Preis sowie die mögliche Verfügbarkeit.",
+    "",
+    "Vielen Dank im Voraus.",
+    "",
+    "Mit freundlichen Grüßen"
+  ].join("\n");
+}
+
+
+/* Erstellt einen direkten Outlook-Web-Link */
+function createOutlookLink(firm){
+  if(!firm || !isValidEmailAddress(firm.email)){
+    return "";
+  }
+
+  const recipient = encodeURIComponent(firm.email);
+  const subject = encodeURIComponent(createFirmEmailSubject(firm));
+  const body = encodeURIComponent(createFirmEmailBody(firm));
+
+  return (
+    "https://outlook.office.com/mail/deeplink/compose" +
+    `?to=${recipient}` +
+    `&subject=${subject}` +
+    `&body=${body}`
+  );
+}
+
+
+/* Erstellt das sichtbare HTML für die E-Mail-Adresse */
+function createFirmEmailHtml(firm){
+  if(!firm || !isValidEmailAddress(firm.email)){
+    return "";
+  }
+
+  const outlookLink = createOutlookLink(firm);
+
+  return `
+    <a
+      class="firmEmailLink"
+      href="${esc(outlookLink)}"
+      target="_blank"
+      rel="noopener noreferrer"
+      onclick="event.stopPropagation()"
+      title="Vorbereitete E-Mail in Outlook öffnen"
+    >
+      ✉️ ${esc(firm.email)}
+    </a>
+  `;
+}
+
+
+/* ==========================================================
+   DIE URSPRÜNGLICHE loadFirms-FUNKTION WIRD ERSETZT
+========================================================== */
+
+loadFirms = async function(){
+  const rows = await parseCsv(CONFIG.firmsCsvUrl);
+  const list = [];
+
+  rows.forEach((r,idx)=>{
+    const name = str(r["firma"] ?? r["name"]).trim();
+    const addr = buildFirmAddress(r);
+
+    if(!addr){
+      addMissing(
+        "firmen",
+        name || "Firma",
+        "Keine Adresse",
+        `Zeile: ${idx + 2}`
+      );
+
+      return;
+    }
+
+    const base = getFirmBasePricesFromRow(r);
+    const products = getFirmProductsFromRow(r,base);
+
+    const certRaw = str(
+      r["zertifikat"] ??
+      r["zertifikate"] ??
+      r["zertifikat(e)"]
+    ).trim();
+
+    /* E-Mail aus Spalte Q */
+    const email = getFirmEmailFromRow(r);
+
+    list.push({
+      id:"F" + idx,
+      name:name || "Firma",
+      address:addr,
+
+      /* Neue Eigenschaft */
+      email:email,
+
+      geoKey:"F_" + normText(name + "_" + addr),
+      base:base,
+      products:products,
+      stand:getStandFromRow(r),
+      certificateRaw:certRaw,
+      certificates:normalizeCertificates(certRaw),
+
+      lat:toNum(
+        pickRowField(
+          r,
+          ["lat","latitude","breitengrad"],
+          18
+        )
+      ),
+
+      lon:toNum(
+        pickRowField(
+          r,
+          ["lon","lng","longitude","längengrad"],
+          19
+        )
+      ),
+
+      raw:r
+    });
+  });
+
+  firms = list;
+};
+
+
+/* ==========================================================
+   E-MAIL BEI DER AUSGEWÄHLTEN FIRMA OBEN ANZEIGEN
+========================================================== */
+
+const originalUpdateOriginKpiWithEmail = updateOriginKpi;
+
+updateOriginKpi = function(origin){
+  originalUpdateOriginKpiWithEmail(origin);
+
+  const addressElement = document.getElementById("kpiCustomerAddr");
+
+  if(!addressElement){
+    return;
+  }
+
+  if(!origin){
+    addressElement.textContent = "—";
+    return;
+  }
+
+  const isFirm =
+    String(origin.id || "").startsWith("F") ||
+    isValidEmailAddress(origin.email);
+
+  if(isFirm && isValidEmailAddress(origin.email)){
+    addressElement.innerHTML = `
+      <div>${esc(origin.address || "—")}</div>
+      ${createFirmEmailHtml(origin)}
+    `;
+  }else{
+    addressElement.textContent = origin.address || "—";
+  }
+};
+
+
+/* ==========================================================
+   E-MAIL NACH DER BERECHNUNG IN DEN FIRMENZEILEN ANZEIGEN
+========================================================== */
+
+function addFirmEmailsToResultTable(){
+  /*
+    Im Modus „Kunden“ bestehen die Ergebnisse aus Firmen.
+    Im Modus „Firmen“ bestehen die Ergebnisse aus Kunden.
+  */
+  if(getSearchType() !== "kunden"){
+    return;
+  }
+
+  const tableRows = document.querySelectorAll(
+    "#results table tbody tr"
+  );
+
+  tableRows.forEach((tableRow,index)=>{
+    const result = lastResults[index];
+    const firm = result?.entity;
+
+    if(!firm || !isValidEmailAddress(firm.email)){
+      return;
+    }
+
+    const firstCell = tableRow.querySelector("td");
+
+    if(!firstCell){
+      return;
+    }
+
+    /* Verhindert doppelte Links */
+    if(firstCell.querySelector(".firmEmailLink")){
+      return;
+    }
+
+    firstCell.insertAdjacentHTML(
+      "beforeend",
+      createFirmEmailHtml(firm)
+    );
+  });
+}
+
+
+/* Ursprüngliche Berechnung aufrufen und danach E-Mails ergänzen */
+const originalCalculateWithEmail = calculate;
+
+calculate = async function(){
+  await originalCalculateWithEmail();
+
+  addFirmEmailsToResultTable();
+
+  /*
+    Die ausgewählte Firma oben erneut aktualisieren,
+    damit deren E-Mail ebenfalls sicher angezeigt wird.
+  */
+  const origin = getOrigin();
+
+  if(origin){
+    updateOriginKpi(origin);
+  }
+};
+
+
+/* ==========================================================
+   E-MAIL AUCH IN DEN DETAILINFORMATIONEN ANZEIGEN
+========================================================== */
+
+const originalShowDetailWithEmail = showDetail;
+
+showDetail = function(row){
+  originalShowDetailWithEmail(row);
+
+  const grid = document.getElementById("detailGrid");
+
+  if(!grid || !row?.entity){
+    return;
+  }
+
+  const firm = row.entity;
+
+  if(!isValidEmailAddress(firm.email)){
+    return;
+  }
+
+  grid.insertAdjacentHTML(
+    "beforeend",
+    `
+      <div class="kv">
+        <span class="k">E-Mail</span>
+        <span class="v">
+          ${createFirmEmailHtml(firm)}
+        </span>
+      </div>
+    `
+  );
+};
+
+
+/* ==========================================================
+   E-MAIL AUCH IM KARTEN-POPUP DER FIRMA ANZEIGEN
+========================================================== */
+
+const originalRenderMarkersWithEmail = renderMarkers;
+
+renderMarkers = function(){
+  originalRenderMarkersWithEmail();
+
+  /*
+    Die bereits erzeugten Firmenmarker erhalten einen
+    erweiterten Popup-Inhalt mit E-Mail-Adresse.
+  */
+  firmMarkers.forEach((marker,index)=>{
+    const firm = firms[index];
+
+    if(!firm){
+      return;
+    }
+
+    const emailHtml = createFirmEmailHtml(firm);
+
+    marker.setPopupContent(`
+      <b>${esc(firm.name)}</b>
+      <br>
+      ${esc(firm.address)}
+      <br>
+      Zertifikat:
+      ${esc(
+        (firm.certificates || [])
+          .map(certificateLabel)
+          .join(", ") || "—"
+      )}
+      ${emailHtml ? `<br>${emailHtml}` : ""}
+    `);
+  });
+};
 </script>
 </body>
 </html>  
