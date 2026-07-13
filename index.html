@@ -690,34 +690,155 @@ function initUI(){
   initSearch();
 }
 function initSearch(){
-  const input=document.getElementById("custSearch"),ac=document.getElementById("ac");
-  function pos(){const r=input.getBoundingClientRect();ac.style.left=r.left+"px";ac.style.top=r.bottom+8+"px";ac.style.minWidth=Math.max(280,r.width)+"px"}
-  function list(){return getSearchType()==="kunden"?customers:firms}
-  function show(qRaw){
-    const q=(qRaw||"").trim().toLowerCase();ac.innerHTML="";if(!q){ac.style.display="none";return}
-    const out=list().filter(x=>(x.name||"").toLowerCase().includes(q)||(x.address||"").toLowerCase().includes(q)).slice(0,15);
-    if(!out.length){
-  const d=document.createElement("div");
-  d.className="item";
-  d.innerHTML=`
-    <div class="name">📍 "${esc(qRaw)}" als ${getSearchType()==="kunden" ? "neuen Schnell-Kunden" : "neue Schnell-Firma"} nutzen</div>
-    <div class="addr">Ort / PLZ / Adresse suchen und direkt berechnen</div>
-  `;
+  const input = document.getElementById("custSearch");
+  const ac = document.getElementById("ac");
 
-  d.onclick=async()=>{
-    ac.style.display="none";
-    await createQuickSearchPoint(qRaw);
-  };
+  function positionAutocomplete(){
+    const rect = input.getBoundingClientRect();
 
-  ac.appendChild(d);
-  ac.style.display="block";
-  return;
-}
-    out.forEach(x=>{const d=document.createElement("div");d.className="item";d.innerHTML=`<div class="name">${esc(x.name)}</div><div class="addr">${esc(x.address)}</div><div class="tag">${getSearchType()==="kunden"?"Kunde":"Firma"}</div>`;d.onclick=()=>{getSearchType()==="kunden"?selectCustomer(x):selectFirm(x);ac.style.display="none"};ac.appendChild(d)});
-    ac.style.display="block";
+    ac.style.left = rect.left + "px";
+    ac.style.top = (rect.bottom + 8) + "px";
+    ac.style.minWidth = Math.max(280, rect.width) + "px";
   }
-  input.onfocus=()=>{pos();show(input.value)};input.oninput=()=>{pos();show(input.value)};
-  document.addEventListener("click",e=>{if(!ac.contains(e.target)&&e.target!==input)ac.style.display="none"});
+
+  function getSearchList(){
+    return getSearchType() === "kunden"
+      ? customers
+      : firms;
+  }
+
+  function closeAutocomplete(){
+    ac.style.display = "none";
+    ac.innerHTML = "";
+  }
+
+  function selectSearchResult(item){
+    closeAutocomplete();
+
+    input.value = item.name || "";
+
+    if(getSearchType() === "kunden"){
+      selectCustomer(item);
+    }else{
+      selectFirm(item);
+    }
+  }
+
+  function showResults(){
+    const query = String(input.value || "")
+      .trim()
+      .toLowerCase();
+
+    positionAutocomplete();
+    ac.innerHTML = "";
+
+    if(!query){
+      closeAutocomplete();
+      return;
+    }
+
+    const searchList = getSearchList();
+
+    const matches = searchList
+      .filter(item=>{
+        const name = String(item.name || "").toLowerCase();
+        const address = String(item.address || "").toLowerCase();
+
+        return name.includes(query) || address.includes(query);
+      })
+      .slice(0,15);
+
+    if(!matches.length){
+      const quickItem = document.createElement("div");
+      quickItem.className = "item";
+
+      quickItem.innerHTML = `
+        <div class="name">
+          📍 „${esc(input.value)}“ als
+          ${getSearchType() === "kunden"
+            ? "neuen Schnell-Kunden"
+            : "neue Schnell-Firma"} nutzen
+        </div>
+
+        <div class="addr">
+          Ort, Postleitzahl oder Adresse suchen
+        </div>
+      `;
+
+      quickItem.addEventListener("mousedown",event=>{
+        event.preventDefault();
+        event.stopPropagation();
+
+        const value = input.value;
+        closeAutocomplete();
+        createQuickSearchPoint(value);
+      });
+
+      ac.appendChild(quickItem);
+      ac.style.display = "block";
+      return;
+    }
+
+    matches.forEach(item=>{
+      const resultItem = document.createElement("div");
+      resultItem.className = "item";
+
+      resultItem.innerHTML = `
+        <div class="name">${esc(item.name)}</div>
+        <div class="addr">${esc(item.address)}</div>
+        <div class="tag">
+          ${getSearchType() === "kunden" ? "Kunde" : "Firma"}
+        </div>
+      `;
+
+      resultItem.addEventListener("mousedown",event=>{
+        event.preventDefault();
+        event.stopPropagation();
+
+        selectSearchResult(item);
+      });
+
+      ac.appendChild(resultItem);
+    });
+
+    ac.style.display = "block";
+  }
+
+  input.addEventListener("focus",showResults);
+  input.addEventListener("input",showResults);
+
+  input.addEventListener("keydown",event=>{
+    if(event.key !== "Enter"){
+      return;
+    }
+
+    const firstResult = ac.querySelector(".item");
+
+    if(firstResult){
+      event.preventDefault();
+      firstResult.dispatchEvent(
+        new MouseEvent("mousedown",{
+          bubbles:true,
+          cancelable:true
+        })
+      );
+    }
+  });
+
+  document.getElementById("searchType")
+    .addEventListener("change",()=>{
+      input.value = "";
+      closeAutocomplete();
+    });
+
+  document.addEventListener("mousedown",event=>{
+    if(
+      event.target !== input &&
+      !ac.contains(event.target)
+    ){
+      closeAutocomplete();
+    }
+  });
 }
 function initMobileUI(){
   document.getElementById("btnMenu").onclick=()=>openDrawer();document.getElementById("drawerClose").onclick=closeDrawer;document.getElementById("drawerBackdrop").onclick=closeDrawer;
