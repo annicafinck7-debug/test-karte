@@ -825,13 +825,55 @@ function createOriginCustomerEmailLink(customer){
     return "";
   }
 
-  const subject = "Anfrage an " + (customer.name || "Kunde");
+  const inp = getInputs();
 
-  const link =
-    "mailto:" +
-    encodeURIComponent(email) +
-    "?subject=" +
-    encodeURIComponent(subject);
+const subject = "Angebot Holzpellets ENplus A1";
+
+let material = "";
+
+switch(inp.product){
+  case "sackware":
+    material = "Holzpellets ENplus A1 6mm Sackware á 15kg";
+    break;
+
+  case "lose":
+    material = "Holzpellets ENplus A1 6mm lose";
+    break;
+
+  case "industrieware":
+    material = "Industrieware";
+    break;
+}
+
+const body =
+  "Hallo,\r\n\r\n" +
+
+  "ich kann Ihnen freibleibend die " +
+  fmt(inp.qtyT,2) +
+  "to Holzpellets wie folgt anbieten,\r\n\r\n" +
+
+  "Material: " +
+  material +
+  "\r\n" +
+
+  "Lieferzeit: Juli '26\r\n" +
+
+  "Menge: " +
+  fmt(inp.qtyT,2) +
+  " Tonnen\r\n" +
+
+  "Preis: " +
+  fmt(row.deliveredPerT,2) +
+  " €/t zzgl. gesetzl. MwSt.\r\n" +
+
+  "Lieferkondition: DAP";
+ const link =
+  "mailto:" +
+  encodeURIComponent(email) +
+  "?subject=" +
+  encodeURIComponent(subject) +
+  "&body=" +
+  encodeURIComponent(body);
 
   return (
     '<a href="' + esc(link) + '"' +
