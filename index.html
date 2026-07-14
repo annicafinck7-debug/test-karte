@@ -866,7 +866,84 @@ function showOrdersForOrigin(o){
   listEl.innerHTML=list.slice(0,12).map(x=>`• ${esc(x.firma||x.kunde)} — ${fmt(x.anzahl,0)}x`).join("<br>");
   box.style.display="block";
 }
+function validEmail(email){
+  const value = String(email || "").trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
 
+function createOfferMailData(pricePerT){
+  const inp = getInputs();
+
+  const subject = "Angebot Holzpellets ENplus A1";
+
+  let material = "";
+  let quantityText = "";
+
+  if(inp.product === "sackware"){
+    material = "Holzpellets ENplus A1 6mm Sackware á 15kg";
+    quantityText = fmt(inp.qtyT,2) + " Tonnen";
+  }else if(inp.product === "industrieware"){
+    material = "Holzpellets Industrieware";
+    quantityText = fmt(inp.qtyT,2) + " Tonnen";
+  }else{
+    material = "Holzpellets ENplus A1 6mm lose";
+    quantityText =
+      "ca. " +
+      fmt(inp.qtyT,2) +
+      " Tonnen (+/- 2%)";
+  }
+
+  const priceText = isFinite(pricePerT)
+    ? fmt(pricePerT,2) + " €/t zzgl. gesetzl. MwSt."
+    : "Preis bitte ergänzen";
+
+  const body =
+    "Hallo,\r\n\r\n" +
+    "ich kann Ihnen freibleibend die " +
+    fmt(inp.qtyT,2) +
+    "to Holzpellets wie folgt anbieten,\r\n\r\n" +
+    "Material: " +
+    material +
+    "\r\n" +
+    "Lieferzeit: Juli '26\r\n" +
+    "Menge: " +
+    quantityText +
+    "\r\n" +
+    "Preis: " +
+    priceText +
+    "\r\n" +
+    "Lieferkondition: DAP\r\n\r\n" +
+    "Für weitere Fragen oder Anregungen stehe ich Ihnen gerne zur Verfügung.";
+
+  return {
+    subject:subject,
+    body:body
+  };
+}
+
+function createCustomerEmailLink(customer,pricePerT){
+  if(!customer || !validEmail(customer.email)){
+    return "";
+  }
+
+  const mailData = createOfferMailData(pricePerT);
+
+  const mailLink =
+    "mailto:" +
+    encodeURIComponent(String(customer.email).trim()) +
+    "?subject=" +
+    encodeURIComponent(mailData.subject) +
+    "&body=" +
+    encodeURIComponent(mailData.body);
+
+  return (
+    '<a href="' + esc(mailLink) + '"' +
+    ' onclick="event.stopPropagation()"' +
+    ' style="display:block;margin-top:5px;color:#2563eb;font-weight:800;text-decoration:none;word-break:break-all;">' +
+    '✉ ' + esc(customer.email) +
+    '</a>'
+  );
+}
 async function calculate(){
   const out=document.getElementById("results");out.innerHTML="";hideDetail();clearRoute();
   const mode=getSearchType(),origin=getOrigin(),w=getWarehouseRef(),inp=getInputs();
