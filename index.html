@@ -873,11 +873,9 @@ function validEmail(email){
 
 function createOfferMailData(pricePerT){
   const inp = getInputs();
-
   const subject = "Angebot Holzpellets ENplus A1";
 
   const now = new Date();
-
   const monthNames = [
     "Januar",
     "Februar",
@@ -896,24 +894,24 @@ function createOfferMailData(pricePerT){
   const deliveryMonth = monthNames[now.getMonth()];
   const deliveryYear = String(now.getFullYear()).slice(-2);
 
-  let material = "";
-  let quantityText = "";
-  let offerQuantity = inp.qtyT;
+  let material;
+  let quantityText;
+  let offerQuantity;
 
   if(inp.product === "sackware"){
     material = "Holzpellets ENplus A1 6mm Sackware á 15kg";
     offerQuantity = 23.76;
     quantityText = fmt(offerQuantity,2) + " Tonnen";
-  }
-  else if(inp.product === "industrieware"){
+  }else if(inp.product === "industrieware"){
     material = "Holzpellets Industrieware";
-    quantityText = fmt(inp.qtyT,2) + " Tonnen";
-  }
-  else{
+    offerQuantity = inp.qtyT;
+    quantityText = fmt(offerQuantity,2) + " Tonnen";
+  }else{
     material = "Holzpellets ENplus A1 6mm lose";
+    offerQuantity = inp.qtyT;
     quantityText =
       "ca. " +
-      fmt(inp.qtyT,2) +
+      fmt(offerQuantity,2) +
       " Tonnen (+/- 2%)";
   }
 
@@ -926,29 +924,22 @@ function createOfferMailData(pricePerT){
     "ich kann Ihnen freibleibend die " +
     fmt(offerQuantity,2) +
     "to Holzpellets wie folgt anbieten,\r\n\r\n" +
-    "Material: " +
-    material +
-    "\r\n" +
+    "Material: " + material + "\r\n" +
     "Lieferzeit: " +
     deliveryMonth +
     " '" +
     deliveryYear +
     "\r\n" +
-    "Menge: " +
-    quantityText +
-    "\r\n" +
-    "Preis: " +
-    priceText +
-    "\r\n" +
+    "Menge: " + quantityText + "\r\n" +
+    "Preis: " + priceText + "\r\n" +
     "Lieferkondition: DAP\r\n\r\n" +
     "Für weitere Fragen oder Anregungen stehe ich Ihnen gerne zur Verfügung.";
 
   return {
-    subject:subject,
-    body:body
+    subject: subject,
+    body: body
   };
 }
-
   const priceText = isFinite(pricePerT)
     ? fmt(pricePerT,2) + " €/t zzgl. gesetzl. MwSt."
     : "Preis bitte ergänzen";
