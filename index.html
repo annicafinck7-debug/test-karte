@@ -818,10 +818,63 @@ function getWarehouseRef(){return selectedWarehouse?.ref||null}
 
 function selectCustomer(c){selectedCustomer=c;selectedFirm=null;updateOriginKpi(c);showOrdersForOrigin(c);renderMarkers();map.setView([c.lat,c.lon],Math.max(map.getZoom(),8),{animate:true});document.getElementById("panel").classList.remove("hidden")}
 function selectFirm(f){selectedFirm=f;selectedCustomer=null;updateOriginKpi(f);showOrdersForOrigin(f);renderMarkers();map.setView([f.lat,f.lon],Math.max(map.getZoom(),8),{animate:true});document.getElementById("panel").classList.remove("hidden")}
-function updateOriginKpi(o){
-  document.getElementById("kpiOriginLabel").textContent=getSearchType()==="kunden"?"Kunde":"Firma";
-  document.getElementById("kpiCustomer").textContent=o?.name||"—";document.getElementById("kpiCustomerAddr").textContent=o?.address||"—";
-  if(!o){document.getElementById("kpiCount").textContent="—";document.getElementById("kpiQty").textContent="Menge: —";document.getElementById("ordersBox").style.display="none"}
+function createOriginCustomerEmailLink(customer){
+  const email = String(customer?.email || "").trim();
+
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+    return "";
+  }
+
+  const subject = "Anfrage an " + (customer.name || "Kunde");
+
+  const link =
+    "mailto:" +
+    encodeURIComponent(email) +
+    "?subject=" +
+    encodeURIComponent(subject);
+
+  return (
+    '<a href="' + esc(link) + '"' +
+    ' onclick="event.stopPropagation()"' +
+    ' style="' +
+      'display:block;' +
+      'margin-top:5px;' +
+      'color:#2563eb;' +
+      'font-weight:800;' +
+      'text-decoration:none;' +
+      'word-break:break-all;' +
+    '">' +
+      '✉ ' + esc(email) +
+    '</a>'
+  );
+}
+  function updateOriginKpi(o){
+  const mode = getSearchType();
+
+  document.getElementById("kpiOriginLabel").textContent =
+    mode === "kunden" ? "Kunde" : "Firma";
+
+  document.getElementById("kpiCustomer").textContent =
+    o?.name || "—";
+
+  const addressBox =
+    document.getElementById("kpiCustomerAddr");
+
+  if(!o){
+    addressBox.textContent = "—";
+    document.getElementById("kpiCount").textContent = "—";
+    document.getElementById("kpiQty").textContent = "Menge: —";
+    document.getElementById("ordersBox").style.display = "none";
+    return;
+  }
+
+  if(mode === "kunden"){
+    addressBox.innerHTML =
+      '<div>' + esc(o.address || "—") + '</div>' +
+      createOriginCustomerEmailLink(o);
+  }else{
+    addressBox.textContent = o.address || "—";
+  }
 }
 function updateModeUI(){
   const firmMode=getSearchType()==="firmen";
