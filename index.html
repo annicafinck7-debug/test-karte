@@ -818,78 +818,7 @@ function getWarehouseRef(){return selectedWarehouse?.ref||null}
 
 function selectCustomer(c){selectedCustomer=c;selectedFirm=null;updateOriginKpi(c);showOrdersForOrigin(c);renderMarkers();map.setView([c.lat,c.lon],Math.max(map.getZoom(),8),{animate:true});document.getElementById("panel").classList.remove("hidden")}
 function selectFirm(f){selectedFirm=f;selectedCustomer=null;updateOriginKpi(f);showOrdersForOrigin(f);renderMarkers();map.setView([f.lat,f.lon],Math.max(map.getZoom(),8),{animate:true});document.getElementById("panel").classList.remove("hidden")}
-function createOriginCustomerEmailLink(customer){
-  const email = String(customer?.email || "").trim();
 
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
-    return "";
-  }
-
-  const inp = getInputs();
-console.log("Produkt:", inp.product);
-const subject = "Angebot Holzpellets ENplus A1";
-
-let material = "";
-
-switch(inp.product){
-  case "sackware":
-    material = "Holzpellets ENplus A1 6mm Sackware á 15kg";
-    break;
-
-  case "lose":
-    material = "Holzpellets ENplus A1 6mm lose";
-    break;
-
-  case "industrieware":
-    material = "Industrieware";
-    break;
-}
-
-const body =
-  "Hallo,\r\n\r\n" +
-
-  "ich kann Ihnen freibleibend die " +
-  fmt(inp.qtyT,2) +
-  "to Holzpellets wie folgt anbieten,\r\n\r\n" +
-
-  "Material: " +
-  material +
-  "\r\n" +
-
-  "Lieferzeit: Juli '26\r\n" +
-
-  "Menge: " +
-  fmt(inp.qtyT,2) +
-  " Tonnen\r\n" +
-
-  "Preis: " +
-  fmt(row.deliveredPerT,2) +
-  " €/t zzgl. gesetzl. MwSt.\r\n" +
-
-  "Lieferkondition: DAP";
- const link =
-  "mailto:" +
-  encodeURIComponent(email) +
-  "?subject=" +
-  encodeURIComponent(subject) +
-  "&body=" +
-  encodeURIComponent(body);
-
-  return (
-    '<a href="' + esc(link) + '"' +
-    ' onclick="event.stopPropagation()"' +
-    ' style="' +
-      'display:block;' +
-      'margin-top:5px;' +
-      'color:#2563eb;' +
-      'font-weight:800;' +
-      'text-decoration:none;' +
-      'word-break:break-all;' +
-    '">' +
-      '✉ ' + esc(email) +
-    '</a>'
-  );
-}
   function updateOriginKpi(o){
   const mode = getSearchType();
 
@@ -937,57 +866,7 @@ function showOrdersForOrigin(o){
   listEl.innerHTML=list.slice(0,12).map(x=>`• ${esc(x.firma||x.kunde)} — ${fmt(x.anzahl,0)}x`).join("<br>");
   box.style.display="block";
 }
-function validEmail(email){
-  const value = String(email || "").trim();
 
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
-
-function createCustomerEmailLink(customer){
-  if(!customer || !validEmail(customer.email)){
-    return "";
-  }
-
-  const inp = getInputs();
-  const productName = productLabel(inp.product);
-
-  const subject =
-    "Angebot " + productName + " - " + customer.name;
-
-  const body =
-    "Guten Tag,\r\n\r\n" +
-    "gerne möchten wir Ihnen ein Angebot für " +
-    productName +
-    " unterbreiten.\r\n\r\n" +
-    "Menge: " +
-    fmt(inp.qtyT,1) +
-    " t\r\n\r\n" +
-    "Für weitere Informationen stehen wir Ihnen gerne zur Verfügung.\r\n\r\n" +
-    "Mit freundlichen Grüßen";
-
-  const mailLink =
-    "mailto:" +
-    encodeURIComponent(String(customer.email).trim()) +
-    "?subject=" +
-    encodeURIComponent(subject) +
-    "&body=" +
-    encodeURIComponent(body);
-
-  return (
-    '<a href="' + esc(mailLink) + '"' +
-    ' onclick="event.stopPropagation()"' +
-    ' style="' +
-      'display:block;' +
-      'margin-top:5px;' +
-      'color:#2563eb;' +
-      'font-weight:800;' +
-      'text-decoration:none;' +
-      'word-break:break-all;' +
-    '">' +
-      '✉ ' + esc(customer.email) +
-    '</a>'
-  );
-}
 async function calculate(){
   const out=document.getElementById("results");out.innerHTML="";hideDetail();clearRoute();
   const mode=getSearchType(),origin=getOrigin(),w=getWarehouseRef(),inp=getInputs();
@@ -1044,45 +923,14 @@ updateMiniKpis(countMargins(results,inp.targetVk));
   const tb=table.querySelector("tbody");
 results.forEach(row=>{
   const tr = document.createElement("tr");
-
-  let emailHtml = "";
-
-  if(mode === "firmen" && validEmail(row.entity.email)){
-    const subject =
-      "Angebot Holzpellets ENplus A1";
-
-    const body =
-      "Hallo,\r\n\r\n" +
-      "ich kann Ihnen freibleibend die " +
-      fmt(inp.qtyT,0) +
-      "to Holzpellets wie folgt anbieten,\r\n\r\n" +
-      "Material: Holzpellets ENplus A1 6mm lose\r\n" +
-      "Lieferzeit: Juli '26\r\n" +
-      "Menge: ca. " +
-      fmt(inp.qtyT,0) +
-      " Tonnen (+/- 2%)\r\n" +
-      "Preis: " +
-      fmt(row.deliveredPerT,2) +
-      " €/t zzgl. gesetzl. MwSt.\r\n" +
-      "Lieferkondition:\r\n\r\n" +
-      "Für weitere Fragen oder Anregungen stehe ich Ihnen gerne zur Verfügung.";
-
-    const mailLink =
-      "mailto:" +
-      encodeURIComponent(String(row.entity.email).trim()) +
-      "?subject=" +
-      encodeURIComponent(subject) +
-      "&body=" +
-      encodeURIComponent(body);
-
-    emailHtml =
-      '<a href="' + esc(mailLink) + '"' +
-      ' onclick="event.stopPropagation()"' +
-      ' style="display:block;margin-top:5px;color:#2563eb;font-weight:800;text-decoration:none;word-break:break-all;">' +
-      '✉ ' + esc(row.entity.email) +
-      '</a>';
-  }
-
+const emailHtml =
+  mode === "firmen"
+    ? createCustomerEmailLink(
+        row.entity,
+        row.deliveredPerT
+      )
+    : "";
+  
   tr.innerHTML = `
     <td>
       <b>${esc(row.entity.name)}</b>
