@@ -557,18 +557,59 @@ function applyCacheCoordsOnly(){
   firms.forEach(applyCoordsFromCache);
 }
 async function geocodeItem(item){
-  if(isFinite(item.lat)&&isFinite(item.lon))return {lat:item.lat,lon:item.lon};
-  if(applyCoordsFromCache(item))return {lat:item.lat,lon:item.lon};
-  const q=item.address;if(!q)return null;
+
+  if(isFinite(item.lat) && isFinite(item.lon)){
+    return {lat:item.lat, lon:item.lon};
+  }
+
+  if(applyCoordsFromCache(item)){
+    return {lat:item.lat, lon:item.lon};
+  }
+
+  const q = item.address;
+  if(!q) return null;
+
+  const url =
+    "https://nominatim.openstreetmap.org/search" +
+    "?format=jsonv2" +
+    "&limit=1" +
+    "&email=DEINEEMAIL@GMAIL.COM" +
+    "&q=" + encodeURIComponent(q);
+
   try{
-  const url="https://nominatim.openstreetmap.org/search?format=json&limit=1&q="+encodeURIComponent(q);  
-    const res=await fetch(url,{headers:{"Accept":"application/json"}});
-    const data=await res.json();
-    if(data&&data[0]){
-      const lat=parseFloat(data[0].lat),lon=parseFloat(data[0].lon);
-      if(isFinite(lat)&&isFinite(lon)){item.lat=lat;item.lon=lon;saveCoordsToCache(item,lat,lon);return{lat,lon}}
+
+    const res = await fetch(url,{
+      headers:{
+        "Accept":"application/json"
+      }
+    });
+
+    if(!res.ok){
+      throw new Error("HTTP " + res.status);
     }
-  }catch(e){console.warn("Geocode Fehler",item.name,e)}
+
+    const data = await res.json();
+
+    if(data && data[0]){
+
+      const lat = parseFloat(data[0].lat);
+      const lon = parseFloat(data[0].lon);
+
+      if(isFinite(lat) && isFinite(lon)){
+
+        item.lat = lat;
+        item.lon = lon;
+
+        saveCoordsToCache(item,lat,lon);
+
+        return {lat,lon};
+      }
+    }
+
+  }catch(e){
+    console.warn("Geocode Fehler:", item.name, e);
+  }
+
   return null;
 }
 async function geocodeAll(){
