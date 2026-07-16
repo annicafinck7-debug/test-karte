@@ -916,6 +916,29 @@ function getWarehouseRef(){return selectedWarehouse?.ref||null}
 function selectCustomer(c){selectedCustomer=c;selectedFirm=null;updateOriginKpi(c);showOrdersForOrigin(c);renderMarkers();map.setView([c.lat,c.lon],Math.max(map.getZoom(),8),{animate:true});document.getElementById("panel").classList.remove("hidden")}
 function selectFirm(f){selectedFirm=f;selectedCustomer=null;updateOriginKpi(f);showOrdersForOrigin(f);renderMarkers();map.setView([f.lat,f.lon],Math.max(map.getZoom(),8),{animate:true});document.getElementById("panel").classList.remove("hidden")}
 
+  function createOriginCustomerEmailLink(customer){
+  if(!customer || !validEmail(customer.email)){
+    return "";
+  }
+
+  const mailData = createOfferMailData(NaN);
+
+  const mailLink =
+    "mailto:" +
+    encodeURIComponent(String(customer.email).trim()) +
+    "?subject=" +
+    encodeURIComponent(mailData.subject) +
+    "&body=" +
+    encodeURIComponent(mailData.body);
+
+  return (
+    '<a href="' + esc(mailLink) + '"' +
+    ' onclick="event.stopPropagation()"' +
+    ' style="display:block;margin-top:5px;color:#2563eb;font-weight:800;text-decoration:none;word-break:break-all;">' +
+    '✉ ' + esc(customer.email) +
+    '</a>'
+  );
+}
   function updateOriginKpi(o){
   const mode = getSearchType();
 
