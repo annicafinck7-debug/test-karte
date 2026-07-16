@@ -797,11 +797,14 @@ function initSearch(){
         input.value = item.name || "";
         closeSearch();
 
-        if(getSearchType() === "kunden"){
-          selectCustomer(item);
-        }else{
-          selectFirm(item);
-        }
+       if(getSearchType() === "kunden"){
+  selectCustomer(item);
+}else{
+  selectFirm(item);
+}
+
+/* Nach der Auswahl direkt berechnen */
+calculate();
       });
 
       ac.appendChild(d);
